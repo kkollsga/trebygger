@@ -337,15 +337,21 @@
             <div class="control-section">
                 <h2>Verktøy</h2>
                 <div class="btn-group">
-                    <button id="rotateMode" class="btn-secondary">Roter (R)</button>
-                    <button id="deleteMode" class="btn-danger">Slett (D)</button>
+                    <button id="rotateMode" class="btn-secondary">Roter (Hold R)</button>
+                    <button id="deleteMode" class="btn-danger">Slett (Hold T)</button>
                     <button id="undoBtn" class="btn-secondary">Angre</button>
                     <button id="redoBtn" class="btn-secondary">Gjør om</button>
                 </div>
                 <p class="help-text">
-                    Klikk og dra for å plassere planker.<br>
-                    Hold Shift for å låse til rutenett.<br>
-                    Scroll for å zoome.
+                    <strong>Navigasjon:</strong> WASD + QE<br>
+                    <strong>Plassering:</strong> Klikk og dra<br>
+                    <strong>Roter:</strong> Hold R + klikk<br>
+                    <strong>Slett:</strong> Hold T + klikk<br>
+                    <strong>Vertikal:</strong> Hold V<br>
+                    <strong>Rutenett:</strong> Hold Shift<br>
+                    <strong>Kopier:</strong> C | <strong>Fokus:</strong> F<br>
+                    <strong>Vis/skjul rutenett:</strong> G<br>
+                    <strong>Hurtigvalg:</strong> 1-9 (materialer)
                 </p>
             </div>
         </div>
@@ -411,6 +417,7 @@
                 this.selectedMaterial = WOOD_MATERIALS[0];
                 this.woodPieces = [];
                 this.selectedPiece = null;
+                this.selectedPieces = new Set();
                 this.isDragging = false;
                 this.dragPlane = new THREE.Plane();
                 this.dragOffset = new THREE.Vector3();
@@ -418,6 +425,23 @@
                 this.mode = 'place'; // place, rotate, delete
                 this.gridSize = 10;
                 this.snapToGrid = false;
+                this.verticalMove = false;
+                this.rotationMode = false;
+                this.deleteMode = false;
+                this.multiSelect = false;
+                
+                // Collision detection
+                this.collisionHelper = new THREE.Box3();
+                this.tempBox = new THREE.Box3();
+                
+                // Visual helpers
+                this.gridHelper = null;
+                this.axisHelper = null;
+                this.showHelpers = true;
+                
+                // Ghost preview
+                this.ghostPiece = null;
+                this.validPlacement = true;
                 
                 // Project management
                 this.projects = this.loadProjects();
@@ -426,6 +450,9 @@
                 // Undo/Redo
                 this.history = [];
                 this.historyIndex = -1;
+                
+                // Camera saved positions
+                this.savedCameraPositions = {};
                 
                 this.init();
             }
@@ -457,8 +484,13 @@
                 this.scene.add(directionalLight);
 
                 // Grid
-                const gridHelper = new THREE.GridHelper(2000, 200, 0x444444, 0x222222);
-                this.scene.add(gridHelper);
+                this.gridHelper = new THREE.GridHelper(2000, 200, 0x444444, 0x222222);
+                this.scene.add(this.gridHelper);
+                
+                // Axis helper
+                this.axisHelper = new THREE.AxesHelper(100);
+                this.axisHelper.visible = false;
+                this.scene.add(this.axisHelper);
 
                 // Ground plane
                 const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
@@ -498,6 +530,7 @@
                 window.addEventListener('mousedown', (e) => this.onMouseDown(e));
                 window.addEventListener('mouseup', (e) => this.onMouseUp(e));
                 window.addEventListener('wheel', (e) => this.onWheel(e));
+                window.addEventListener('contextmenu', (e) => e.preventDefault());
 
                 // Keyboard events
                 window.addEventListener('keydown', (e) => this.onKeyDown(e));
@@ -508,8 +541,8 @@
 
                 // UI events
                 document.getElementById('addWood').addEventListener('click', () => this.addWoodPiece());
-                document.getElementById('rotateMode').addEventListener('click', () => this.setMode('rotate'));
-                document.getElementById('deleteMode').addEventListener('click', () => this.setMode('delete'));
+                document.getElementById('rotateMode').addEventListener('click', () => this.toggleRotationMode());
+                document.getElementById('deleteMode').addEventListener('click', () => this.toggleDeleteMode());
                 document.getElementById('undoBtn').addEventListener('click', () => this.undo());
                 document.getElementById('redoBtn').addEventListener('click', () => this.redo());
                 
@@ -536,40 +569,101 @@
                 this.selectedMaterial = material;
                 document.querySelectorAll('.material-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                
+                // Update ghost piece with new material
+                if (this.ghostPiece) {
+                    this.scene.remove(this.ghostPiece);
+                    this.ghostPiece = null;
+                }
             }
 
-            createWoodPiece(material, length) {
+            createWoodPiece(material, length, isGhost = false) {
                 const geometry = new THREE.BoxGeometry(material.width, material.height, length);
                 
                 // Wood texture
                 const woodMaterial = new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(0.6, 0.4, 0.2),
+                    color: isGhost ? new THREE.Color(0.2, 0.6, 0.2) : new THREE.Color(0.6, 0.4, 0.2),
                     roughness: 0.8,
-                    metalness: 0.1
+                    metalness: 0.1,
+                    transparent: isGhost,
+                    opacity: isGhost ? 0.5 : 1.0
                 });
 
                 const mesh = new THREE.Mesh(geometry, woodMaterial);
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
+                mesh.castShadow = !isGhost;
+                mesh.receiveShadow = !isGhost;
                 mesh.userData = {
                     material: material,
                     length: length,
-                    isWood: true
+                    isWood: true,
+                    isGhost: isGhost
                 };
 
                 return mesh;
+            }
+
+            checkCollision(piece, excludePieces = []) {
+                const box1 = new THREE.Box3().setFromObject(piece);
+                
+                for (const otherPiece of this.woodPieces) {
+                    if (otherPiece === piece || excludePieces.includes(otherPiece)) continue;
+                    
+                    const box2 = new THREE.Box3().setFromObject(otherPiece);
+                    if (box1.intersectsBox(box2)) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+
+            updateGhostPiece(position) {
+                if (!this.ghostPiece) {
+                    this.ghostPiece = this.createWoodPiece(this.selectedMaterial, 
+                        parseFloat(document.getElementById('lengthInput').value), true);
+                    this.scene.add(this.ghostPiece);
+                }
+                
+                this.ghostPiece.position.copy(position);
+                
+                if (this.snapToGrid) {
+                    this.ghostPiece.position.x = Math.round(this.ghostPiece.position.x / this.gridSize) * this.gridSize;
+                    this.ghostPiece.position.z = Math.round(this.ghostPiece.position.z / this.gridSize) * this.gridSize;
+                }
+                
+                this.validPlacement = !this.checkCollision(this.ghostPiece);
+                this.ghostPiece.material.color = this.validPlacement ? 
+                    new THREE.Color(0.2, 0.6, 0.2) : new THREE.Color(0.6, 0.2, 0.2);
+            }
+
+            removeGhostPiece() {
+                if (this.ghostPiece) {
+                    this.scene.remove(this.ghostPiece);
+                    this.ghostPiece = null;
+                }
             }
 
             addWoodPiece() {
                 const length = parseFloat(document.getElementById('lengthInput').value);
                 if (!length || length < 100) return;
 
-                const piece = this.createWoodPiece(this.selectedMaterial, length);
+                const piece = this.createWoodPiece(this.selectedMaterial, length, false);
                 piece.position.set(
                     Math.random() * 200 - 100,
                     this.selectedMaterial.height / 2,
                     Math.random() * 200 - 100
                 );
+
+                // Check for collision at random position
+                let attempts = 0;
+                while (this.checkCollision(piece) && attempts < 20) {
+                    piece.position.set(
+                        Math.random() * 400 - 200,
+                        this.selectedMaterial.height / 2,
+                        Math.random() * 400 - 200
+                    );
+                    attempts++;
+                }
 
                 this.scene.add(piece);
                 this.woodPieces.push(piece);
@@ -579,22 +673,105 @@
                 this.autoSave();
             }
 
-            setMode(mode) {
-                this.mode = mode;
-                
-                // Update UI
-                document.getElementById('rotateMode').classList.toggle('active', mode === 'rotate');
-                document.getElementById('deleteMode').classList.toggle('active', mode === 'delete');
-                
-                // Show mode indicator
+            updateModeIndicator() {
                 const indicator = document.getElementById('modeIndicator');
-                if (mode === 'place') {
-                    indicator.style.display = 'none';
-                } else {
+                
+                if (this.rotationMode) {
                     indicator.style.display = 'block';
-                    indicator.textContent = mode === 'rotate' ? 'Roteringsmodus' : 'Slettmodus';
-                    indicator.className = `mode-indicator ${mode}`;
+                    indicator.textContent = 'Roteringsmodus (Venstre: Horisontal, Høyre: Vertikal)';
+                    indicator.className = 'mode-indicator rotate';
+                } else if (this.deleteMode) {
+                    indicator.style.display = 'block';
+                    indicator.textContent = 'Slettmodus (Hold T + klikk)';
+                    indicator.className = 'mode-indicator delete';
+                } else {
+                    indicator.style.display = 'none';
                 }
+            }
+
+            toggleRotationMode() {
+                this.rotationMode = !this.rotationMode;
+                this.updateModeIndicator();
+            }
+
+            toggleDeleteMode() {
+                this.deleteMode = !this.deleteMode;
+                this.updateModeIndicator();
+            }
+
+            copyPiece(piece) {
+                const newPiece = this.createWoodPiece(piece.userData.material, piece.userData.length);
+                newPiece.position.copy(piece.position);
+                newPiece.position.x += 100; // Offset to avoid overlap
+                newPiece.rotation.copy(piece.rotation);
+                
+                this.scene.add(newPiece);
+                this.woodPieces.push(newPiece);
+                
+                this.selectedPiece = newPiece;
+                this.saveToHistory();
+                this.updateStats();
+                this.autoSave();
+            }
+
+            highlightPiece(piece) {
+                piece.material = piece.material.clone();
+                piece.material.emissive = new THREE.Color(0x4a9eff);
+                piece.material.emissiveIntensity = 0.3;
+            }
+
+            unhighlightPiece(piece) {
+                piece.material.emissive = new THREE.Color(0x000000);
+                piece.material.emissiveIntensity = 0;
+            }
+
+            clearSelection() {
+                this.selectedPiece = null;
+                this.selectedPieces.forEach(piece => this.unhighlightPiece(piece));
+                this.selectedPieces.clear();
+            }
+
+            selectAll() {
+                this.clearSelection();
+                this.woodPieces.forEach(piece => {
+                    this.selectedPieces.add(piece);
+                    this.highlightPiece(piece);
+                });
+            }
+
+            focusOnSelection() {
+                if (this.selectedPiece || this.selectedPieces.size > 0) {
+                    const pieces = this.selectedPiece ? [this.selectedPiece] : Array.from(this.selectedPieces);
+                    
+                    // Calculate bounding box of selection
+                    const box = new THREE.Box3();
+                    pieces.forEach(piece => {
+                        box.expandByObject(piece);
+                    });
+                    
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    
+                    // Position camera to view selection
+                    const distance = maxDim * 2;
+                    this.camera.position.set(
+                        center.x + distance,
+                        center.y + distance,
+                        center.z + distance
+                    );
+                    this.camera.lookAt(center);
+                }
+            }
+
+            resetCamera() {
+                this.camera.position.set(500, 500, 500);
+                this.camera.lookAt(0, 0, 0);
+            }
+
+            toggleHelp() {
+                // This would show/hide a help overlay - implement if needed
+                console.log('Help toggled');
             }
 
             onMouseMove(event) {
@@ -603,16 +780,53 @@
 
                 if (this.isDragging && this.selectedPiece) {
                     this.raycaster.setFromCamera(this.mouse, this.camera);
+                    
+                    // Determine drag plane based on vertical move mode
+                    if (this.verticalMove) {
+                        // Create vertical plane facing camera
+                        const cameraDir = new THREE.Vector3();
+                        this.camera.getWorldDirection(cameraDir);
+                        cameraDir.y = 0;
+                        cameraDir.normalize();
+                        this.dragPlane.setFromNormalAndCoplanarPoint(cameraDir, this.selectedPiece.position);
+                    } else {
+                        // Horizontal plane
+                        this.dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), this.selectedPiece.position);
+                    }
+                    
                     const intersectPoint = new THREE.Vector3();
                     this.raycaster.ray.intersectPlane(this.dragPlane, intersectPoint);
                     
                     if (intersectPoint) {
-                        this.selectedPiece.position.copy(intersectPoint).add(this.dragOffset);
+                        const newPosition = intersectPoint.clone().add(this.dragOffset);
                         
                         if (this.snapToGrid) {
-                            this.selectedPiece.position.x = Math.round(this.selectedPiece.position.x / this.gridSize) * this.gridSize;
-                            this.selectedPiece.position.z = Math.round(this.selectedPiece.position.z / this.gridSize) * this.gridSize;
+                            newPosition.x = Math.round(newPosition.x / this.gridSize) * this.gridSize;
+                            newPosition.y = this.verticalMove ? Math.round(newPosition.y / this.gridSize) * this.gridSize : newPosition.y;
+                            newPosition.z = Math.round(newPosition.z / this.gridSize) * this.gridSize;
                         }
+                        
+                        // Check collision before moving
+                        const oldPosition = this.selectedPiece.position.clone();
+                        this.selectedPiece.position.copy(newPosition);
+                        
+                        if (this.checkCollision(this.selectedPiece, Array.from(this.selectedPieces))) {
+                            // Collision detected, revert position
+                            this.selectedPiece.position.copy(oldPosition);
+                        }
+                    }
+                } else if (!this.isDragging && !this.rotationMode && !this.deleteMode) {
+                    // Show ghost piece when not dragging
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const intersects = this.raycaster.intersectObjects([...this.woodPieces, 
+                        this.scene.children.find(c => c.userData.isGround)]);
+                    
+                    if (intersects.length > 0) {
+                        const point = intersects[0].point;
+                        point.y = this.selectedMaterial.height / 2;
+                        this.updateGhostPiece(point);
+                    } else {
+                        this.removeGhostPiece();
                     }
                 }
 
@@ -621,26 +835,62 @@
             }
 
             onMouseDown(event) {
-                if (event.button !== 0) return;
-
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 const intersects = this.raycaster.intersectObjects(this.woodPieces);
 
                 if (intersects.length > 0) {
                     const piece = intersects[0].object;
                     
-                    if (this.mode === 'delete') {
+                    if (this.deleteMode && this.keys['t']) {
+                        // Delete mode with T held
                         this.deletePiece(piece);
-                    } else if (this.mode === 'rotate') {
-                        this.rotatePiece(piece);
-                    } else {
-                        this.selectedPiece = piece;
-                        this.isDragging = true;
-                        
-                        const planeNormal = new THREE.Vector3(0, 1, 0);
-                        this.dragPlane.setFromNormalAndCoplanarPoint(planeNormal, intersects[0].point);
-                        this.dragOffset.subVectors(piece.position, intersects[0].point);
+                    } else if (this.rotationMode) {
+                        // Rotation mode with R held
+                        if (event.button === 0) {
+                            // Left click - rotate horizontal
+                            piece.rotation.y += Math.PI / 2;
+                        } else if (event.button === 2) {
+                            // Right click - rotate vertical
+                            piece.rotation.z += Math.PI / 2;
+                        }
+                        this.saveToHistory();
+                        this.autoSave();
+                    } else if (event.button === 0 && !this.keys['t']) {
+                        // Normal drag mode
+                        if (this.multiSelect && this.keys['Shift']) {
+                            // Multi-select with Shift
+                            if (this.selectedPieces.has(piece)) {
+                                this.selectedPieces.delete(piece);
+                                this.unhighlightPiece(piece);
+                            } else {
+                                this.selectedPieces.add(piece);
+                                this.highlightPiece(piece);
+                            }
+                        } else {
+                            // Single select
+                            this.clearSelection();
+                            this.selectedPiece = piece;
+                            this.isDragging = true;
+                            
+                            const planeNormal = this.verticalMove ? 
+                                new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+                            this.dragPlane.setFromNormalAndCoplanarPoint(planeNormal, intersects[0].point);
+                            this.dragOffset.subVectors(piece.position, intersects[0].point);
+                        }
                     }
+                } else if (event.button === 0 && this.ghostPiece && this.validPlacement) {
+                    // Place new piece at ghost position
+                    const piece = this.createWoodPiece(this.selectedMaterial, 
+                        parseFloat(document.getElementById('lengthInput').value));
+                    piece.position.copy(this.ghostPiece.position);
+                    piece.rotation.copy(this.ghostPiece.rotation);
+                    
+                    this.scene.add(piece);
+                    this.woodPieces.push(piece);
+                    
+                    this.saveToHistory();
+                    this.updateStats();
+                    this.autoSave();
                 }
             }
 
@@ -650,6 +900,11 @@
                     this.selectedPiece = null;
                     this.saveToHistory();
                     this.autoSave();
+                }
+                
+                // Remove ghost piece when placing
+                if (event.button === 0 && this.ghostPiece && this.validPlacement) {
+                    this.removeGhostPiece();
                 }
             }
 
@@ -661,35 +916,100 @@
             }
 
             onKeyDown(event) {
-                this.keys[event.key] = true;
+                // Store special keys differently
+                if (event.key === 'Shift' || event.key.startsWith('Arrow')) {
+                    this.keys[event.key] = true;
+                } else {
+                    this.keys[event.key.toLowerCase()] = true;
+                }
                 
+                // Mode toggles
+                if (event.key === 'r' || event.key === 'R') {
+                    this.rotationMode = true;
+                    this.updateModeIndicator();
+                }
+                
+                if (event.key === 'v' || event.key === 'V') {
+                    this.verticalMove = true;
+                }
+                
+                if (event.key === 't' || event.key === 'T') {
+                    this.deleteMode = true;
+                    this.updateModeIndicator();
+                }
+                
+                // Other hotkeys
                 if (event.key === 'Shift') {
                     this.snapToGrid = true;
-                } else if (event.key === 'r' || event.key === 'R') {
-                    this.setMode(this.mode === 'rotate' ? 'place' : 'rotate');
-                } else if (event.key === 'd' || event.key === 'D') {
-                    this.setMode(this.mode === 'delete' ? 'place' : 'delete');
-                } else if (event.key === 'z' && event.ctrlKey) {
+                    this.multiSelect = true;
+                } else if (event.key === 'c' || event.key === 'C') {
+                    // Copy selected piece
+                    if (this.selectedPiece) {
+                        this.copyPiece(this.selectedPiece);
+                    }
+                } else if (event.key === 'g' || event.key === 'G') {
+                    // Toggle grid
+                    this.gridHelper.visible = !this.gridHelper.visible;
+                } else if (event.key === 'h' || event.key === 'H') {
+                    // Toggle help overlay
+                    this.toggleHelp();
+                } else if (event.key === ' ') {
+                    // Reset camera
+                    event.preventDefault();
+                    this.resetCamera();
+                } else if (event.key === 'f' || event.key === 'F') {
+                    // Focus on selected pieces
+                    this.focusOnSelection();
+                } else if (event.key === 'Escape') {
+                    // Clear selection
+                    this.clearSelection();
+                    this.removeGhostPiece();
+                } else if ((event.key === 'z' || event.key === 'Z') && event.ctrlKey) {
                     event.preventDefault();
                     this.undo();
-                } else if (event.key === 'y' && event.ctrlKey) {
+                } else if ((event.key === 'y' || event.key === 'Y') && event.ctrlKey) {
                     event.preventDefault();
                     this.redo();
+                } else if ((event.key === 'a' || event.key === 'A') && event.ctrlKey) {
+                    // Select all
+                    event.preventDefault();
+                    this.selectAll();
+                } else if (event.key >= '1' && event.key <= '9') {
+                    // Quick material selection
+                    const index = parseInt(event.key) - 1;
+                    if (index < WOOD_MATERIALS.length) {
+                        this.selectMaterial(WOOD_MATERIALS[index], 
+                            document.querySelectorAll('.material-btn')[index]);
+                    }
                 }
             }
 
             onKeyUp(event) {
-                this.keys[event.key] = false;
+                // Handle special keys
+                if (event.key === 'Shift' || event.key.startsWith('Arrow')) {
+                    this.keys[event.key] = false;
+                } else {
+                    this.keys[event.key.toLowerCase()] = false;
+                }
                 
                 if (event.key === 'Shift') {
                     this.snapToGrid = false;
+                    this.multiSelect = false;
                 }
-            }
-
-            rotatePiece(piece) {
-                piece.rotation.y += Math.PI / 2;
-                this.saveToHistory();
-                this.autoSave();
+                
+                if (event.key === 'r' || event.key === 'R') {
+                    this.rotationMode = false;
+                    this.updateModeIndicator();
+                }
+                
+                if (event.key === 'v' || event.key === 'V') {
+                    this.verticalMove = false;
+                }
+                
+                if (event.key === 't' || event.key === 'T') {
+                    this.deleteMode = false;
+                    this.updateModeIndicator();
+                }
             }
 
             deletePiece(piece) {
@@ -697,6 +1017,10 @@
                 if (index > -1) {
                     this.woodPieces.splice(index, 1);
                     this.scene.remove(piece);
+                    this.selectedPieces.delete(piece);
+                    if (this.selectedPiece === piece) {
+                        this.selectedPiece = null;
+                    }
                     this.saveToHistory();
                     this.updateStats();
                     this.autoSave();
@@ -707,7 +1031,7 @@
                 const tooltip = document.getElementById('tooltip');
                 
                 this.raycaster.setFromCamera(this.mouse, this.camera);
-                const intersects = this.raycaster.intersectObjects(this.woodPieces);
+                const intersects = this.raycaster.intersectObjects(this.woodPieces.filter(p => !p.userData.isGhost));
                 
                 if (intersects.length > 0) {
                     const piece = intersects[0].object;
@@ -751,13 +1075,13 @@
 
             calculateStats() {
                 const stats = {
-                    totalPieces: this.woodPieces.length,
+                    totalPieces: 0,
                     totalLength: 0,
                     totalPrice: 0,
                     materials: {}
                 };
 
-                this.woodPieces.forEach(piece => {
+                this.woodPieces.filter(p => !p.userData.isGhost).forEach(piece => {
                     const data = piece.userData;
                     const key = data.material.name;
                     
@@ -773,6 +1097,7 @@
                     stats.materials[key].totalLength += data.length;
                     stats.totalLength += data.length;
                     stats.totalPrice += (data.length * data.material.pricePerMeter / 1000);
+                    stats.totalPieces++;
                 });
 
                 return stats;
@@ -785,7 +1110,7 @@
                 
                 // Add new state
                 const state = {
-                    pieces: this.woodPieces.map(piece => ({
+                    pieces: this.woodPieces.filter(p => !p.userData.isGhost).map(piece => ({
                         material: piece.userData.material,
                         length: piece.userData.length,
                         position: piece.position.toArray(),
@@ -825,10 +1150,12 @@
                 // Clear current pieces
                 this.woodPieces.forEach(piece => this.scene.remove(piece));
                 this.woodPieces = [];
+                this.clearSelection();
+                this.removeGhostPiece();
                 
                 // Load pieces from state
                 state.pieces.forEach(pieceData => {
-                    const piece = this.createWoodPiece(pieceData.material, pieceData.length);
+                    const piece = this.createWoodPiece(pieceData.material, pieceData.length, false);
                     piece.position.fromArray(pieceData.position);
                     piece.rotation.fromArray(pieceData.rotation);
                     this.scene.add(piece);
@@ -871,7 +1198,7 @@
                 
                 const projectData = {
                     name: name,
-                    pieces: this.woodPieces.map(piece => ({
+                    pieces: this.woodPieces.filter(p => !p.userData.isGhost).map(piece => ({
                         material: piece.userData.material,
                         length: piece.userData.length,
                         position: piece.position.toArray(),
@@ -904,10 +1231,12 @@
                 // Clear current scene
                 this.woodPieces.forEach(piece => this.scene.remove(piece));
                 this.woodPieces = [];
+                this.clearSelection();
+                this.removeGhostPiece();
                 
                 // Load project data
                 project.pieces.forEach(pieceData => {
-                    const piece = this.createWoodPiece(pieceData.material, pieceData.length);
+                    const piece = this.createWoodPiece(pieceData.material, pieceData.length, false);
                     piece.position.fromArray(pieceData.position);
                     piece.rotation.fromArray(pieceData.rotation);
                     this.scene.add(piece);
@@ -943,6 +1272,8 @@
                 this.currentProject = null;
                 this.woodPieces.forEach(piece => this.scene.remove(piece));
                 this.woodPieces = [];
+                this.clearSelection();
+                this.removeGhostPiece();
                 this.history = [];
                 this.historyIndex = -1;
                 document.getElementById('projectSelect').value = '';
@@ -953,7 +1284,7 @@
                 if (this.currentProject) {
                     const projectData = {
                         name: this.currentProject,
-                        pieces: this.woodPieces.map(piece => ({
+                        pieces: this.woodPieces.filter(p => !p.userData.isGhost).map(piece => ({
                             material: piece.userData.material,
                             length: piece.userData.length,
                             position: piece.position.toArray(),
@@ -974,12 +1305,12 @@
                 // WASD camera movement
                 const moveVector = new THREE.Vector3();
                 
-                if (this.keys['w'] || this.keys['W']) moveVector.z -= 1;
-                if (this.keys['s'] || this.keys['S']) moveVector.z += 1;
-                if (this.keys['a'] || this.keys['A']) moveVector.x -= 1;
-                if (this.keys['d'] || this.keys['D']) moveVector.x += 1;
-                if (this.keys['q'] || this.keys['Q']) moveVector.y -= 1;
-                if (this.keys['e'] || this.keys['E']) moveVector.y += 1;
+                if (this.keys['w']) moveVector.z -= 1;
+                if (this.keys['s']) moveVector.z += 1;
+                if (this.keys['a']) moveVector.x -= 1;
+                if (this.keys['d']) moveVector.x += 1;
+                if (this.keys['q']) moveVector.y -= 1;
+                if (this.keys['e']) moveVector.y += 1;
                 
                 if (moveVector.length() > 0) {
                     moveVector.normalize();
