@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Trebygger</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Control Panel */
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            width: 320px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #4a9eff;
+        }
+
+        h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #888;
+        }
+
+        /* Material Selection */
+        .material-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .material-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .material-btn:hover {
+            background: rgba(74, 158, 255, 0.2);
+            border-color: #4a9eff;
+        }
+
+        .material-btn.active {
+            background: #4a9eff;
+            border-color: #4a9eff;
+        }
+
+        /* Input Controls */
+        .input-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        input[type="number"], input[type="text"], select {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        input[type="number"]:focus, input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: #4a9eff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        select option {
+            background: #2a2a2a;
+        }
+
+        /* Buttons */
+        button {
+            background: #4a9eff;
+            color: #fff;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        button:hover {
+            background: #5aa3ff;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-danger {
+            background: #ff4757;
+        }
+
+        .btn-danger:hover {
+            background: #ff5867;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        /* Stats Panel */
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            width: 280px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .stat-label {
+            color: #aaa;
+        }
+
+        .stat-value {
+            color: #4a9eff;
+            font-weight: 500;
+        }
+
+        /* Material List */
+        .material-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+
+        .material-item {
+            font-size: 13px;
+            margin-bottom: 6px;
+            padding: 6px 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute;
+            background: rgba(30, 30, 30, 0.95);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Mode Indicators */
+        .mode-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 30, 30, 0.95);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mode-indicator.rotate {
+            background: rgba(255, 151, 0, 0.2);
+            border-color: #ff9700;
+            color: #ff9700;
+        }
+
+        .mode-indicator.delete {
+            background: rgba(255, 71, 87, 0.2);
+            border-color: #ff4757;
+            color: #ff4757;
+        }
+
+        /* Help Text */
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="canvas"></canvas>
+        
+        <div id="controls">
+            <div class="control-section">
+                <h2>Prosjekter</h2>
+                <div class="input-group">
+                    <select id="projectSelect">
+                        <option value="">Nytt prosjekt</option>
+                    </select>
+                </div>
+                <div class="btn-group">
+                    <button id="saveProject">Lagre</button>
+                    <button id="deleteProject" class="btn-danger">Slett</button>
+                    <button id="newProject" class="btn-secondary">Nytt</button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h2>Velg Material</h2>
+                <div class="material-grid" id="materialGrid"></div>
+            </div>
+
+            <div class="control-section">
+                <h2>Dimensjoner</h2>
+                <div class="input-group">
+                    <label for="lengthInput">Lengde (mm)</label>
+                    <input type="number" id="lengthInput" value="2000" min="100" max="6000" step="100">
+                </div>
+                <button id="addWood">Legg til planke</button>
+            </div>
+
+            <div class="control-section">
+                <h2>Verktøy</h2>
+                <div class="btn-group">
+                    <button id="rotateMode" class="btn-secondary">Roter (R)</button>
+                    <button id="deleteMode" class="btn-danger">Slett (D)</button>
+                    <button id="undoBtn" class="btn-secondary">Angre</button>
+                    <button id="redoBtn" class="btn-secondary">Gjør om</button>
+                </div>
+                <p class="help-text">
+                    Klikk og dra for å plassere planker.<br>
+                    Hold Shift for å låse til rutenett.<br>
+                    Scroll for å zoome.
+                </p>
+            </div>
+        </div>
+
+        <div id="stats">
+            <h2>Materialoversikt</h2>
+            <div class="stat-item">
+                <span class="stat-label">Antall planker:</span>
+                <span class="stat-value" id="totalPieces">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Total lengde:</span>
+                <span class="stat-value" id="totalLength">0 m</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Estimert pris:</span>
+                <span class="stat-value" id="totalPrice">0 kr</span>
+            </div>
+            <h3 style="margin-top: 16px;">Materialliste:</h3>
+            <div class="material-list" id="materialList"></div>
+        </div>
+
+        <div id="tooltip"></div>
+        <div id="modeIndicator" class="mode-indicator" style="display: none;"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Wood material definitions
+        const WOOD_MATERIALS = [
+            { name: '48x98', width: 48, height: 98, pricePerMeter: 45 },
+            { name: '28x120', width: 28, height: 120, pricePerMeter: 35 },
+            { name: '48x148', width: 48, height: 148, pricePerMeter: 65 },
+            { name: '48x48', width: 48, height: 48, pricePerMeter: 25 },
+            { name: '28x120 Terrasse', width: 28, height: 120, pricePerMeter: 55 },
+            { name: '98x98', width: 98, height: 98, pricePerMeter: 85 },
+            { name: '48x198', width: 48, height: 198, pricePerMeter: 95 },
+            { name: '23x48', width: 23, height: 48, pricePerMeter: 18 },
+            { name: '36x48', width: 36, height: 48, pricePerMeter: 22 },
+            { name: '30x48', width: 30, height: 48, pricePerMeter: 20 },
+            { name: '48x73', width: 48, height: 73, pricePerMeter: 35 },
+            { name: '19x148', width: 19, height: 148, pricePerMeter: 45 },
+            { name: '36x98', width: 36, height: 98, pricePerMeter: 40 }
+        ];
+
+        class WoodBuildingApp {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    10000
+                );
+                this.renderer = new THREE.WebGLRenderer({ 
+                    canvas: document.getElementById('canvas'),
+                    antialias: true 
+                });
+                
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                
+                this.selectedMaterial = WOOD_MATERIALS[0];
+                this.woodPieces = [];
+                this.selectedPiece = null;
+                this.isDragging = false;
+                this.dragPlane = new THREE.Plane();
+                this.dragOffset = new THREE.Vector3();
+                
+                this.mode = 'place'; // place, rotate, delete
+                this.gridSize = 10;
+                this.snapToGrid = false;
+                
+                // Project management
+                this.projects = this.loadProjects();
+                this.currentProject = null;
+                
+                // Undo/Redo
+                this.history = [];
+                this.historyIndex = -1;
+                
+                this.init();
+            }
+
+            init() {
+                // Renderer setup
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.setClearColor(0x1a1a1a);
+
+                // Camera setup
+                this.camera.position.set(500, 500, 500);
+                this.camera.lookAt(0, 0, 0);
+
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(200, 400, 200);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.camera.left = -1000;
+                directionalLight.shadow.camera.right = 1000;
+                directionalLight.shadow.camera.top = 1000;
+                directionalLight.shadow.camera.bottom = -1000;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                this.scene.add(directionalLight);
+
+                // Grid
+                const gridHelper = new THREE.GridHelper(2000, 200, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+
+                // Ground plane
+                const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x1a1a1a,
+                    roughness: 0.8
+                });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                ground.userData.isGround = true;
+                this.scene.add(ground);
+
+                // Setup controls
+                this.setupControls();
+                this.setupEventListeners();
+                this.populateMaterialGrid();
+                this.loadProjectList();
+                
+                // Start render loop
+                this.animate();
+            }
+
+            setupControls() {
+                this.controls = {
+                    moveSpeed: 5,
+                    rotateSpeed: 0.01,
+                    zoomSpeed: 20
+                };
+
+                this.keys = {};
+            }
+
+            setupEventListeners() {
+                // Mouse events
+                window.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                window.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                window.addEventListener('mouseup', (e) => this.onMouseUp(e));
+                window.addEventListener('wheel', (e) => this.onWheel(e));
+
+                // Keyboard events
+                window.addEventListener('keydown', (e) => this.onKeyDown(e));
+                window.addEventListener('keyup', (e) => this.onKeyUp(e));
+
+                // Window resize
+                window.addEventListener('resize', () => this.onWindowResize());
+
+                // UI events
+                document.getElementById('addWood').addEventListener('click', () => this.addWoodPiece());
+                document.getElementById('rotateMode').addEventListener('click', () => this.setMode('rotate'));
+                document.getElementById('deleteMode').addEventListener('click', () => this.setMode('delete'));
+                document.getElementById('undoBtn').addEventListener('click', () => this.undo());
+                document.getElementById('redoBtn').addEventListener('click', () => this.redo());
+                
+                // Project management
+                document.getElementById('saveProject').addEventListener('click', () => this.saveCurrentProject());
+                document.getElementById('deleteProject').addEventListener('click', () => this.deleteCurrentProject());
+                document.getElementById('newProject').addEventListener('click', () => this.newProject());
+                document.getElementById('projectSelect').addEventListener('change', (e) => this.loadProject(e.target.value));
+            }
+
+            populateMaterialGrid() {
+                const grid = document.getElementById('materialGrid');
+                WOOD_MATERIALS.forEach((material, index) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'material-btn';
+                    if (index === 0) btn.classList.add('active');
+                    btn.textContent = material.name;
+                    btn.onclick = () => this.selectMaterial(material, btn);
+                    grid.appendChild(btn);
+                });
+            }
+
+            selectMaterial(material, btn) {
+                this.selectedMaterial = material;
+                document.querySelectorAll('.material-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+
+            createWoodPiece(material, length) {
+                const geometry = new THREE.BoxGeometry(material.width, material.height, length);
+                
+                // Wood texture
+                const woodMaterial = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(0.6, 0.4, 0.2),
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+
+                const mesh = new THREE.Mesh(geometry, woodMaterial);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData = {
+                    material: material,
+                    length: length,
+                    isWood: true
+                };
+
+                return mesh;
+            }
+
+            addWoodPiece() {
+                const length = parseFloat(document.getElementById('lengthInput').value);
+                if (!length || length < 100) return;
+
+                const piece = this.createWoodPiece(this.selectedMaterial, length);
+                piece.position.set(
+                    Math.random() * 200 - 100,
+                    this.selectedMaterial.height / 2,
+                    Math.random() * 200 - 100
+                );
+
+                this.scene.add(piece);
+                this.woodPieces.push(piece);
+                
+                this.saveToHistory();
+                this.updateStats();
+                this.autoSave();
+            }
+
+            setMode(mode) {
+                this.mode = mode;
+                
+                // Update UI
+                document.getElementById('rotateMode').classList.toggle('active', mode === 'rotate');
+                document.getElementById('deleteMode').classList.toggle('active', mode === 'delete');
+                
+                // Show mode indicator
+                const indicator = document.getElementById('modeIndicator');
+                if (mode === 'place') {
+                    indicator.style.display = 'none';
+                } else {
+                    indicator.style.display = 'block';
+                    indicator.textContent = mode === 'rotate' ? 'Roteringsmodus' : 'Slettmodus';
+                    indicator.className = `mode-indicator ${mode}`;
+                }
+            }
+
+            onMouseMove(event) {
+                this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+                if (this.isDragging && this.selectedPiece) {
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const intersectPoint = new THREE.Vector3();
+                    this.raycaster.ray.intersectPlane(this.dragPlane, intersectPoint);
+                    
+                    if (intersectPoint) {
+                        this.selectedPiece.position.copy(intersectPoint).add(this.dragOffset);
+                        
+                        if (this.snapToGrid) {
+                            this.selectedPiece.position.x = Math.round(this.selectedPiece.position.x / this.gridSize) * this.gridSize;
+                            this.selectedPiece.position.z = Math.round(this.selectedPiece.position.z / this.gridSize) * this.gridSize;
+                        }
+                    }
+                }
+
+                // Update tooltip
+                this.updateTooltip(event);
+            }
+
+            onMouseDown(event) {
+                if (event.button !== 0) return;
+
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.woodPieces);
+
+                if (intersects.length > 0) {
+                    const piece = intersects[0].object;
+                    
+                    if (this.mode === 'delete') {
+                        this.deletePiece(piece);
+                    } else if (this.mode === 'rotate') {
+                        this.rotatePiece(piece);
+                    } else {
+                        this.selectedPiece = piece;
+                        this.isDragging = true;
+                        
+                        const planeNormal = new THREE.Vector3(0, 1, 0);
+                        this.dragPlane.setFromNormalAndCoplanarPoint(planeNormal, intersects[0].point);
+                        this.dragOffset.subVectors(piece.position, intersects[0].point);
+                    }
+                }
+            }
+
+            onMouseUp(event) {
+                if (this.isDragging) {
+                    this.isDragging = false;
+                    this.selectedPiece = null;
+                    this.saveToHistory();
+                    this.autoSave();
+                }
+            }
+
+            onWheel(event) {
+                const delta = event.deltaY * this.controls.zoomSpeed * 0.01;
+                const direction = new THREE.Vector3();
+                this.camera.getWorldDirection(direction);
+                this.camera.position.addScaledVector(direction, -delta);
+            }
+
+            onKeyDown(event) {
+                this.keys[event.key] = true;
+                
+                if (event.key === 'Shift') {
+                    this.snapToGrid = true;
+                } else if (event.key === 'r' || event.key === 'R') {
+                    this.setMode(this.mode === 'rotate' ? 'place' : 'rotate');
+                } else if (event.key === 'd' || event.key === 'D') {
+                    this.setMode(this.mode === 'delete' ? 'place' : 'delete');
+                } else if (event.key === 'z' && event.ctrlKey) {
+                    event.preventDefault();
+                    this.undo();
+                } else if (event.key === 'y' && event.ctrlKey) {
+                    event.preventDefault();
+                    this.redo();
+                }
+            }
+
+            onKeyUp(event) {
+                this.keys[event.key] = false;
+                
+                if (event.key === 'Shift') {
+                    this.snapToGrid = false;
+                }
+            }
+
+            rotatePiece(piece) {
+                piece.rotation.y += Math.PI / 2;
+                this.saveToHistory();
+                this.autoSave();
+            }
+
+            deletePiece(piece) {
+                const index = this.woodPieces.indexOf(piece);
+                if (index > -1) {
+                    this.woodPieces.splice(index, 1);
+                    this.scene.remove(piece);
+                    this.saveToHistory();
+                    this.updateStats();
+                    this.autoSave();
+                }
+            }
+
+            updateTooltip(event) {
+                const tooltip = document.getElementById('tooltip');
+                
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.woodPieces);
+                
+                if (intersects.length > 0) {
+                    const piece = intersects[0].object;
+                    const data = piece.userData;
+                    
+                    tooltip.innerHTML = `
+                        ${data.material.name} mm<br>
+                        Lengde: ${data.length} mm<br>
+                        Pris: ${(data.length * data.material.pricePerMeter / 1000).toFixed(0)} kr
+                    `;
+                    
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = event.clientX + 15 + 'px';
+                    tooltip.style.top = event.clientY + 15 + 'px';
+                } else {
+                    tooltip.style.display = 'none';
+                }
+            }
+
+            updateStats() {
+                const stats = this.calculateStats();
+                
+                document.getElementById('totalPieces').textContent = stats.totalPieces;
+                document.getElementById('totalLength').textContent = (stats.totalLength / 1000).toFixed(1) + ' m';
+                document.getElementById('totalPrice').textContent = stats.totalPrice.toFixed(0) + ' kr';
+                
+                // Update material list
+                const materialList = document.getElementById('materialList');
+                materialList.innerHTML = '';
+                
+                Object.entries(stats.materials).forEach(([key, data]) => {
+                    const item = document.createElement('div');
+                    item.className = 'material-item';
+                    item.innerHTML = `
+                        <span>${data.material.name}</span>
+                        <span>${data.count} stk (${(data.totalLength / 1000).toFixed(1)} m)</span>
+                    `;
+                    materialList.appendChild(item);
+                });
+            }
+
+            calculateStats() {
+                const stats = {
+                    totalPieces: this.woodPieces.length,
+                    totalLength: 0,
+                    totalPrice: 0,
+                    materials: {}
+                };
+
+                this.woodPieces.forEach(piece => {
+                    const data = piece.userData;
+                    const key = data.material.name;
+                    
+                    if (!stats.materials[key]) {
+                        stats.materials[key] = {
+                            material: data.material,
+                            count: 0,
+                            totalLength: 0
+                        };
+                    }
+                    
+                    stats.materials[key].count++;
+                    stats.materials[key].totalLength += data.length;
+                    stats.totalLength += data.length;
+                    stats.totalPrice += (data.length * data.material.pricePerMeter / 1000);
+                });
+
+                return stats;
+            }
+
+            // Undo/Redo functionality
+            saveToHistory() {
+                // Remove any states after current index
+                this.history = this.history.slice(0, this.historyIndex + 1);
+                
+                // Add new state
+                const state = {
+                    pieces: this.woodPieces.map(piece => ({
+                        material: piece.userData.material,
+                        length: piece.userData.length,
+                        position: piece.position.toArray(),
+                        rotation: piece.rotation.toArray()
+                    }))
+                };
+                
+                this.history.push(state);
+                this.historyIndex++;
+                
+                // Limit history size
+                if (this.history.length > 50) {
+                    this.history.shift();
+                    this.historyIndex--;
+                }
+                
+                this.updateUndoRedoButtons();
+            }
+
+            undo() {
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    this.loadState(this.history[this.historyIndex]);
+                    this.updateUndoRedoButtons();
+                }
+            }
+
+            redo() {
+                if (this.historyIndex < this.history.length - 1) {
+                    this.historyIndex++;
+                    this.loadState(this.history[this.historyIndex]);
+                    this.updateUndoRedoButtons();
+                }
+            }
+
+            loadState(state) {
+                // Clear current pieces
+                this.woodPieces.forEach(piece => this.scene.remove(piece));
+                this.woodPieces = [];
+                
+                // Load pieces from state
+                state.pieces.forEach(pieceData => {
+                    const piece = this.createWoodPiece(pieceData.material, pieceData.length);
+                    piece.position.fromArray(pieceData.position);
+                    piece.rotation.fromArray(pieceData.rotation);
+                    this.scene.add(piece);
+                    this.woodPieces.push(piece);
+                });
+                
+                this.updateStats();
+            }
+
+            updateUndoRedoButtons() {
+                document.getElementById('undoBtn').disabled = this.historyIndex <= 0;
+                document.getElementById('redoBtn').disabled = this.historyIndex >= this.history.length - 1;
+            }
+
+            // Project management
+            loadProjects() {
+                const stored = localStorage.getItem('woodProjects');
+                return stored ? JSON.parse(stored) : {};
+            }
+
+            saveProjects() {
+                localStorage.setItem('woodProjects', JSON.stringify(this.projects));
+            }
+
+            loadProjectList() {
+                const select = document.getElementById('projectSelect');
+                select.innerHTML = '<option value="">Nytt prosjekt</option>';
+                
+                Object.keys(this.projects).forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+            }
+
+            saveCurrentProject() {
+                const name = prompt('Prosjektnavn:', this.currentProject || '');
+                if (!name) return;
+                
+                const projectData = {
+                    name: name,
+                    pieces: this.woodPieces.map(piece => ({
+                        material: piece.userData.material,
+                        length: piece.userData.length,
+                        position: piece.position.toArray(),
+                        rotation: piece.rotation.toArray()
+                    })),
+                    camera: {
+                        position: this.camera.position.toArray(),
+                        rotation: this.camera.rotation.toArray()
+                    }
+                };
+                
+                this.projects[name] = projectData;
+                this.currentProject = name;
+                this.saveProjects();
+                this.loadProjectList();
+                document.getElementById('projectSelect').value = name;
+            }
+
+            loadProject(name) {
+                if (!name) {
+                    this.newProject();
+                    return;
+                }
+                
+                const project = this.projects[name];
+                if (!project) return;
+                
+                this.currentProject = name;
+                
+                // Clear current scene
+                this.woodPieces.forEach(piece => this.scene.remove(piece));
+                this.woodPieces = [];
+                
+                // Load project data
+                project.pieces.forEach(pieceData => {
+                    const piece = this.createWoodPiece(pieceData.material, pieceData.length);
+                    piece.position.fromArray(pieceData.position);
+                    piece.rotation.fromArray(pieceData.rotation);
+                    this.scene.add(piece);
+                    this.woodPieces.push(piece);
+                });
+                
+                // Restore camera
+                if (project.camera) {
+                    this.camera.position.fromArray(project.camera.position);
+                    this.camera.rotation.fromArray(project.camera.rotation);
+                }
+                
+                // Reset history
+                this.history = [];
+                this.historyIndex = -1;
+                this.saveToHistory();
+                
+                this.updateStats();
+            }
+
+            deleteCurrentProject() {
+                if (!this.currentProject) return;
+                
+                if (confirm(`Slette prosjekt "${this.currentProject}"?`)) {
+                    delete this.projects[this.currentProject];
+                    this.saveProjects();
+                    this.newProject();
+                    this.loadProjectList();
+                }
+            }
+
+            newProject() {
+                this.currentProject = null;
+                this.woodPieces.forEach(piece => this.scene.remove(piece));
+                this.woodPieces = [];
+                this.history = [];
+                this.historyIndex = -1;
+                document.getElementById('projectSelect').value = '';
+                this.updateStats();
+            }
+
+            autoSave() {
+                if (this.currentProject) {
+                    const projectData = {
+                        name: this.currentProject,
+                        pieces: this.woodPieces.map(piece => ({
+                            material: piece.userData.material,
+                            length: piece.userData.length,
+                            position: piece.position.toArray(),
+                            rotation: piece.rotation.toArray()
+                        })),
+                        camera: {
+                            position: this.camera.position.toArray(),
+                            rotation: this.camera.rotation.toArray()
+                        }
+                    };
+                    
+                    this.projects[this.currentProject] = projectData;
+                    this.saveProjects();
+                }
+            }
+
+            updateCamera() {
+                // WASD camera movement
+                const moveVector = new THREE.Vector3();
+                
+                if (this.keys['w'] || this.keys['W']) moveVector.z -= 1;
+                if (this.keys['s'] || this.keys['S']) moveVector.z += 1;
+                if (this.keys['a'] || this.keys['A']) moveVector.x -= 1;
+                if (this.keys['d'] || this.keys['D']) moveVector.x += 1;
+                if (this.keys['q'] || this.keys['Q']) moveVector.y -= 1;
+                if (this.keys['e'] || this.keys['E']) moveVector.y += 1;
+                
+                if (moveVector.length() > 0) {
+                    moveVector.normalize();
+                    moveVector.multiplyScalar(this.controls.moveSpeed);
+                    
+                    const forward = new THREE.Vector3();
+                    this.camera.getWorldDirection(forward);
+                    forward.y = 0;
+                    forward.normalize();
+                    
+                    const right = new THREE.Vector3();
+                    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+                    
+                    this.camera.position.addScaledVector(right, moveVector.x);
+                    this.camera.position.addScaledVector(forward, moveVector.z);
+                    this.camera.position.y += moveVector.y;
+                }
+                
+                // Mouse rotation
+                if (this.keys['ArrowLeft']) this.camera.rotation.y += this.controls.rotateSpeed;
+                if (this.keys['ArrowRight']) this.camera.rotation.y -= this.controls.rotateSpeed;
+                if (this.keys['ArrowUp']) this.camera.rotation.x += this.controls.rotateSpeed;
+                if (this.keys['ArrowDown']) this.camera.rotation.x -= this.controls.rotateSpeed;
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                this.updateCamera();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize app
+        const app = new WoodBuildingApp();
+    </script>
+</body>
+</html>
