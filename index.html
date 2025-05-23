@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Wood Builder</title>
+    <title>3D Wood Construction</title>
     <style>
         * {
             margin: 0;
@@ -12,1167 +12,1349 @@
         }
         
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
-            background: #1a1a1a;
-            color: #fff;
+            user-select: none;
         }
         
-        #canvas-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
         }
         
-        /* UI Panels */
-        .panel {
-            position: absolute;
-            background: rgba(30, 30, 30, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
+        #canvas.grabbing {
+            cursor: grabbing;
+        }
+        
+        /* Material Selection Panel */
+        .material-panel {
+            position: fixed;
+            left: 20px;
+            top: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
             padding: 15px;
-            backdrop-filter: blur(10px);
-        }
-        
-        #material-panel {
-            top: 20px;
-            left: 20px;
-            width: 300px;
-            max-height: 80vh;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            max-height: calc(100vh - 40px);
             overflow-y: auto;
+            width: 200px;
         }
         
-        #project-panel {
-            top: 20px;
-            right: 20px;
-            width: 250px;
+        .material-panel h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #333;
         }
         
-        #info-panel {
-            bottom: 20px;
-            left: 20px;
-            min-width: 200px;
-        }
-        
-        #hotbar {
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-        }
-        
-        .hotbar-item {
-            background: rgba(50, 50, 50, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-            padding: 8px 12px;
-            min-width: 80px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .hotbar-item:hover {
-            background: rgba(70, 70, 70, 0.9);
-            border-color: rgba(255, 255, 255, 0.4);
-        }
-        
-        .hotbar-key {
-            display: block;
-            font-size: 10px;
-            color: #aaa;
-            margin-top: 2px;
-        }
-        
-        /* Material Selection */
         .thickness-group {
             margin-bottom: 15px;
         }
         
-        .thickness-header {
-            font-weight: bold;
-            color: #4a9eff;
+        .thickness-group h4 {
+            font-size: 12px;
+            color: #666;
             margin-bottom: 8px;
-            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .wood-option {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-        }
-        
-        .thickness-header:hover {
-            color: #6bb4ff;
-        }
-        
-        .material-list {
-            display: none;
-            padding-left: 10px;
-        }
-        
-        .material-list.active {
-            display: block;
-        }
-        
-        .material-item {
-            padding: 6px 10px;
-            margin: 3px 0;
-            background: rgba(60, 60, 60, 0.5);
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .material-item:hover {
-            background: rgba(80, 80, 80, 0.7);
-            transform: translateX(5px);
-        }
-        
-        .material-item.selected {
-            background: rgba(74, 158, 255, 0.3);
-            border: 1px solid #4a9eff;
-        }
-        
-        /* Length Input */
-        #length-input {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        input[type="number"] {
-            width: 100%;
             padding: 8px;
-            background: rgba(50, 50, 50, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-            border-radius: 4px;
-            margin-top: 5px;
-        }
-        
-        button {
-            background: #4a9eff;
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
+            margin: 4px 0;
+            background: #f5f5f5;
+            border-radius: 6px;
             cursor: pointer;
-            margin-top: 10px;
             transition: all 0.2s;
+            border: 2px solid transparent;
         }
         
-        button:hover {
-            background: #6bb4ff;
-            transform: translateY(-1px);
+        .wood-option:hover {
+            background: #e8e8e8;
+            transform: translateX(2px);
         }
         
-        /* Project Management */
+        .wood-option.active {
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+        
+        .wood-icon {
+            width: 40px;
+            height: 40px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
+        }
+        
+        .wood-label {
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        /* Project Controls */
+        .project-panel {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 200px;
+        }
+        
+        .project-panel h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .project-list {
+            margin-bottom: 10px;
+        }
+        
         .project-item {
             padding: 8px;
-            margin: 5px 0;
-            background: rgba(60, 60, 60, 0.5);
-            border-radius: 4px;
+            margin: 4px 0;
+            background: #f5f5f5;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+        
+        .project-item:hover {
+            background: #e8e8e8;
         }
         
         .project-item.active {
-            background: rgba(74, 158, 255, 0.3);
-            border: 1px solid #4a9eff;
+            background: #e3f2fd;
+            font-weight: 500;
         }
         
-        /* Tooltips */
-        .tooltip {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            padding: 5px 10px;
+        .project-item button {
+            padding: 2px 6px;
+            font-size: 10px;
+            background: #ff5252;
+            color: white;
+            border: none;
             border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .project-controls button {
+            width: 100%;
+            padding: 8px;
+            margin: 4px 0;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
             font-size: 12px;
-            pointer-events: none;
-            z-index: 1000;
+            transition: background 0.2s;
         }
         
-        /* Measurement Lines */
-        .measurement-line {
-            position: absolute;
-            background: #4a9eff;
-            pointer-events: none;
-            opacity: 0.6;
+        .project-controls button:hover {
+            background: #1976d2;
         }
         
-        .measurement-text {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.7);
-            color: #4a9eff;
-            padding: 2px 5px;
-            border-radius: 3px;
+        /* Hotkey Guide */
+        .hotkey-guide {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
             font-size: 11px;
+            transition: opacity 0.3s;
+        }
+        
+        .hotkey-guide.hidden {
+            opacity: 0;
             pointer-events: none;
         }
         
-        /* Mode Indicator */
-        #mode-indicator {
-            position: absolute;
+        .hotkey-group {
+            margin-bottom: 10px;
+        }
+        
+        .hotkey-group h4 {
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #4fc3f7;
+        }
+        
+        .hotkey {
+            display: flex;
+            margin: 3px 0;
+        }
+        
+        .hotkey-key {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-right: 8px;
+            font-family: monospace;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        /* Measurement Display */
+        .measurement {
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(74, 158, 255, 0.2);
-            border: 2px solid #4a9eff;
-            padding: 20px 40px;
-            border-radius: 8px;
-            font-size: 24px;
-            font-weight: bold;
-            display: none;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
             pointer-events: none;
+            transition: opacity 0.2s;
         }
         
-        /* Controls Help */
-        #controls-help {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(30, 30, 30, 0.95);
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 12px;
-            line-height: 1.6;
-            max-width: 300px;
+        .measurement.hidden {
+            opacity: 0;
         }
         
-        #controls-help h4 {
-            margin-bottom: 10px;
-            color: #4a9eff;
-        }
-        
-        #controls-help kbd {
-            background: rgba(60, 60, 60, 0.8);
-            padding: 2px 6px;
-            border-radius: 3px;
-            margin: 0 2px;
-        }
-        
-        /* Material List */
-        #material-list {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .material-summary {
-            margin: 10px 0;
-            padding: 10px;
-            background: rgba(50, 50, 50, 0.5);
-            border-radius: 4px;
-        }
-        
-        .material-summary h4 {
-            color: #4a9eff;
-            margin-bottom: 5px;
-        }
-        
-        /* Scrollbar Styling */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: rgba(30, 30, 30, 0.5);
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: rgba(100, 100, 100, 0.5);
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(120, 120, 120, 0.7);
+        /* Loading */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <div id="canvas-container"></div>
+    <div class="loading" id="loading">Loading 3D environment...</div>
+    <canvas id="canvas"></canvas>
     
     <!-- Material Selection Panel -->
-    <div id="material-panel" class="panel">
-        <h3>Velg Materiale</h3>
-        <div id="material-categories"></div>
-        <div id="length-input">
-            <label>Lengde (mm):</label>
-            <input type="number" id="length" value="2400" min="100" max="6000" step="100">
-            <button onclick="app.createPiece()">Lag Planke</button>
-        </div>
-        <div id="material-list">
-            <h4>Materialliste</h4>
-            <div id="material-summary"></div>
-        </div>
+    <div class="material-panel" id="materialPanel">
+        <h3>Wood Materials</h3>
+        <div id="materialList"></div>
     </div>
     
     <!-- Project Panel -->
-    <div id="project-panel" class="panel">
-        <h3>Prosjekter</h3>
-        <input type="text" id="new-project-name" placeholder="Nytt prosjekt navn...">
-        <button onclick="app.createProject()">Lag Prosjekt</button>
-        <div id="project-list" style="margin-top: 15px;"></div>
-        <div style="margin-top: 15px;">
-            <button onclick="app.undo()">↶ Angre</button>
-            <button onclick="app.redo()">↷ Gjør om</button>
+    <div class="project-panel">
+        <h3>Projects</h3>
+        <div class="project-list" id="projectList"></div>
+        <div class="project-controls">
+            <button onclick="app.createNewProject()">New Project</button>
+            <button onclick="app.renameProject()">Rename</button>
         </div>
     </div>
     
-    <!-- Info Panel -->
-    <div id="info-panel" class="panel">
-        <div id="info-content">
-            <div>Valgt: <span id="selected-material">Ingen</span></div>
-            <div>Modus: <span id="current-mode">Normal</span></div>
-            <div>Antall planker: <span id="piece-count">0</span></div>
+    <!-- Hotkey Guide -->
+    <div class="hotkey-guide" id="hotkeyGuide">
+        <div class="hotkey-group" id="activeGuide" style="display: none;">
+            <h4>Active Piece</h4>
+            <div class="hotkey"><span class="hotkey-key">Z</span> Move along Z axis</div>
+            <div class="hotkey"><span class="hotkey-key">X</span> Move along X axis</div>
+            <div class="hotkey"><span class="hotkey-key">C</span> Move along Y axis</div>
+            <div class="hotkey"><span class="hotkey-key">V</span> + Click end to adjust length</div>
+            <div class="hotkey"><span class="hotkey-key">A</span> Rotate around Z</div>
+            <div class="hotkey"><span class="hotkey-key">S</span> Rotate around X</div>
+            <div class="hotkey"><span class="hotkey-key">D</span> Rotate around Y</div>
+            <div class="hotkey"><span class="hotkey-key">Backspace</span> Cancel</div>
+        </div>
+        <div class="hotkey-group" id="selectedGuide" style="display: none;">
+            <h4>Selected Pieces</h4>
+            <div class="hotkey"><span class="hotkey-key">E</span> + Click to duplicate</div>
+            <div class="hotkey"><span class="hotkey-key">T</span> Delete selected</div>
+            <div class="hotkey"><span class="hotkey-key">Ctrl</span> + Click to multi-select</div>
+        </div>
+        <div class="hotkey-group" id="generalGuide">
+            <h4>General</h4>
+            <div class="hotkey"><span class="hotkey-key">Left Click</span> Pan camera</div>
+            <div class="hotkey"><span class="hotkey-key">Right Click</span> Orbit camera</div>
+            <div class="hotkey"><span class="hotkey-key">Ctrl+Z</span> Undo</div>
+            <div class="hotkey"><span class="hotkey-key">Ctrl+Y</span> Redo</div>
+            <div class="hotkey"><span class="hotkey-key">1-0</span> Quick material select</div>
         </div>
     </div>
     
-    <!-- Hotbar -->
-    <div id="hotbar" class="panel">
-        <div class="hotbar-item" data-key="1">
-            <span class="dimension">Tom</span>
-            <span class="hotbar-key">1</span>
-        </div>
-        <div class="hotbar-item" data-key="2">
-            <span class="dimension">Tom</span>
-            <span class="hotbar-key">2</span>
-        </div>
-        <div class="hotbar-item" data-key="3">
-            <span class="dimension">Tom</span>
-            <span class="hotbar-key">3</span>
-        </div>
-        <div class="hotbar-item" data-key="4">
-            <span class="dimension">Tom</span>
-            <span class="hotbar-key">4</span>
-        </div>
-        <div class="hotbar-item" data-key="5">
-            <span class="dimension">Tom</span>
-            <span class="hotbar-key">5</span>
-        </div>
-    </div>
-    
-    <!-- Mode Indicator -->
-    <div id="mode-indicator"></div>
-    
-    <!-- Controls Help -->
-    <div id="controls-help">
-        <h4>Kontroller</h4>
-        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Naviger</div>
-        <div><kbd>Hold R</kbd> - Roter modus</div>
-        <div><kbd>Hold V</kbd> - Vertikal bevegelse</div>
-        <div><kbd>Hold T + Klikk</kbd> - Slett planke</div>
-        <div><kbd>Hold F + Dra</kbd> - Juster lengde</div>
-        <div><kbd>1-5</kbd> - Rask tilgang</div>
-        <div><kbd>Backspace</kbd> - Avbryt plassering</div>
-        <div><kbd>Scroll</kbd> - Zoom</div>
-    </div>
+    <!-- Measurement Display -->
+    <div class="measurement hidden" id="measurement"></div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Main Application
-        class WoodBuilderApp {
-            constructor() {
-                this.scene = null;
-                this.camera = null;
-                this.renderer = null;
-                this.raycaster = new THREE.Raycaster();
-                this.mouse = new THREE.Vector2();
-                
-                // State
-                this.selectedMaterial = null;
-                this.activePiece = null;
-                this.pieces = [];
-                this.mode = 'normal'; // normal, rotate, vertical, delete, length
-                this.isPlacing = false;
-                this.isDragging = false;
-                
-                // Projects
-                this.projects = {};
-                this.currentProject = null;
-                this.history = [];
-                this.historyIndex = -1;
-                
-                // Materials database
-                this.materials = {
-                    20: [
-                        { thickness: 20, width: 120, name: "20x120 mm" }
-                    ],
-                    28: [
-                        { thickness: 28, width: 120, name: "28x120 mm" }
-                    ],
-                    36: [
-                        { thickness: 36, width: 48, name: "36x48 mm" },
-                        { thickness: 36, width: 98, name: "36x98 mm" }
-                    ],
-                    48: [
-                        { thickness: 48, width: 48, name: "48x48 mm" },
-                        { thickness: 48, width: 73, name: "48x73 mm" },
-                        { thickness: 48, width: 98, name: "48x98 mm" },
-                        { thickness: 48, width: 148, name: "48x148 mm" },
-                        { thickness: 48, width: 198, name: "48x198 mm" }
-                    ],
-                    98: [
-                        { thickness: 98, width: 98, name: "98x98 mm" }
-                    ]
-                };
-                
-                // Recently used dimensions
-                this.recentDimensions = [];
-                
-                // Movement constraints
-                this.gridSize = 10; // mm
-                this.rotationSnap = Math.PI / 12; // 15 degrees
-                
-                // Keys state
-                this.keys = {};
-                
-                this.init();
-            }
+        // Global app object
+        const app = {
+            scene: null,
+            camera: null,
+            renderer: null,
+            raycaster: new THREE.Raycaster(),
+            mouse: new THREE.Vector2(),
             
-            init() {
-                this.setupScene();
-                this.setupLights();
-                this.setupGround();
-                this.setupControls();
-                this.setupUI();
-                this.loadProjects();
-                this.animate();
-            }
+            // State
+            activePiece: null,
+            selectedPieces: new Set(),
+            movementAxis: null,
+            isLengthEditing: false,
+            lengthEditFace: null,
             
-            setupScene() {
-                this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0x222222);
-                this.scene.fog = new THREE.Fog(0x222222, 1000, 10000);
-                
-                this.camera = new THREE.PerspectiveCamera(
-                    60,
-                    window.innerWidth / window.innerHeight,
-                    1,
-                    10000
-                );
-                this.camera.position.set(2000, 1500, 2000);
-                this.camera.lookAt(0, 0, 0);
-                
-                this.renderer = new THREE.WebGLRenderer({ antialias: true });
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-                this.renderer.shadowMap.enabled = true;
-                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-                document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-                
-                window.addEventListener('resize', () => this.onResize());
-            }
+            // Input state
+            keys: {},
+            mouseDown: false,
+            rightMouseDown: false,
+            lastMouseX: 0,
+            lastMouseY: 0,
             
-            setupLights() {
-                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
-                this.scene.add(ambientLight);
-                
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-                directionalLight.position.set(1000, 2000, 1000);
-                directionalLight.castShadow = true;
-                directionalLight.shadow.camera.left = -3000;
-                directionalLight.shadow.camera.right = 3000;
-                directionalLight.shadow.camera.top = 3000;
-                directionalLight.shadow.camera.bottom = -3000;
-                directionalLight.shadow.camera.near = 100;
-                directionalLight.shadow.camera.far = 5000;
-                directionalLight.shadow.mapSize.width = 2048;
-                directionalLight.shadow.mapSize.height = 2048;
-                this.scene.add(directionalLight);
-            }
+            // Wood dimensions (thickness x width in mm)
+            woodDimensions: [
+                // Group by thickness
+                { thickness: 20, widths: [48, 73, 98, 120] },
+                { thickness: 28, widths: [48, 73, 98, 120] },
+                { thickness: 36, widths: [48, 73, 98, 120] },
+                { thickness: 48, widths: [48, 73, 98, 120] },
+                { thickness: 98, widths: [48, 73, 98, 120] }
+            ],
             
-            setupGround() {
-                const groundGeometry = new THREE.PlaneGeometry(10000, 10000);
-                const groundMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0x333333,
-                    depthWrite: false
-                });
-                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-                ground.rotation.x = -Math.PI / 2;
-                ground.receiveShadow = true;
-                ground.name = 'ground';
-                this.scene.add(ground);
-                
-                // Grid
-                const gridHelper = new THREE.GridHelper(10000, 100, 0x444444, 0x444444);
-                this.scene.add(gridHelper);
-            }
+            selectedDimension: null,
+            recentDimensions: [],
             
-            setupControls() {
-                // Mouse events
-                this.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e));
-                this.renderer.domElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
-                this.renderer.domElement.addEventListener('mouseup', (e) => this.onMouseUp(e));
-                this.renderer.domElement.addEventListener('wheel', (e) => this.onWheel(e));
-                
-                // Keyboard events
-                window.addEventListener('keydown', (e) => this.onKeyDown(e));
-                window.addEventListener('keyup', (e) => this.onKeyUp(e));
-            }
-            
-            setupUI() {
-                // Generate material categories
-                const categoriesDiv = document.getElementById('material-categories');
-                Object.entries(this.materials).forEach(([thickness, items]) => {
-                    const groupDiv = document.createElement('div');
-                    groupDiv.className = 'thickness-group';
-                    
-                    const headerDiv = document.createElement('div');
-                    headerDiv.className = 'thickness-header';
-                    headerDiv.innerHTML = `
-                        <span>${thickness}mm tykkelse</span>
-                        <span>▼</span>
-                    `;
-                    headerDiv.onclick = () => {
-                        const list = groupDiv.querySelector('.material-list');
-                        list.classList.toggle('active');
-                        headerDiv.querySelector('span:last-child').textContent = 
-                            list.classList.contains('active') ? '▲' : '▼';
-                    };
-                    
-                    const listDiv = document.createElement('div');
-                    listDiv.className = 'material-list';
-                    
-                    items.forEach(item => {
-                        const itemDiv = document.createElement('div');
-                        itemDiv.className = 'material-item';
-                        itemDiv.textContent = item.name;
-                        itemDiv.onclick = () => this.selectMaterial(item);
-                        listDiv.appendChild(itemDiv);
-                    });
-                    
-                    groupDiv.appendChild(headerDiv);
-                    groupDiv.appendChild(listDiv);
-                    categoriesDiv.appendChild(groupDiv);
-                });
-                
-                // Update hotbar click handlers
-                document.querySelectorAll('.hotbar-item').forEach(item => {
-                    item.onclick = () => {
-                        const key = item.dataset.key;
-                        const index = parseInt(key) - 1;
-                        if (this.recentDimensions[index]) {
-                            this.selectMaterial(this.recentDimensions[index]);
-                            document.getElementById('length').value = this.recentDimensions[index].lastLength || 2400;
-                        }
-                    };
-                });
-            }
-            
-            selectMaterial(material) {
-                this.selectedMaterial = material;
-                
-                // Update UI
-                document.querySelectorAll('.material-item').forEach(item => {
-                    item.classList.remove('selected');
-                    if (item.textContent === material.name) {
-                        item.classList.add('selected');
-                    }
-                });
-                
-                document.getElementById('selected-material').textContent = material.name;
-                
-                // Update recent dimensions
-                const existingIndex = this.recentDimensions.findIndex(
-                    m => m.thickness === material.thickness && m.width === material.width
-                );
-                if (existingIndex !== -1) {
-                    this.recentDimensions.splice(existingIndex, 1);
-                }
-                this.recentDimensions.unshift(material);
-                this.recentDimensions = this.recentDimensions.slice(0, 5);
-                
-                this.updateHotbar();
-            }
-            
-            updateHotbar() {
-                document.querySelectorAll('.hotbar-item').forEach((item, index) => {
-                    const dimensionSpan = item.querySelector('.dimension');
-                    if (this.recentDimensions[index]) {
-                        dimensionSpan.textContent = this.recentDimensions[index].name;
-                    } else {
-                        dimensionSpan.textContent = 'Tom';
-                    }
-                });
-            }
-            
-            createPiece() {
-                if (!this.selectedMaterial) {
-                    alert('Velg et materiale først!');
-                    return;
-                }
-                
-                const length = parseFloat(document.getElementById('length').value);
-                if (length < 100 || length > 6000) {
-                    alert('Lengde må være mellom 100mm og 6000mm');
-                    return;
-                }
-                
-                // Store last used length
-                this.selectedMaterial.lastLength = length;
-                
-                // Create wood piece
-                const geometry = new THREE.BoxGeometry(
-                    this.selectedMaterial.thickness,
-                    this.selectedMaterial.width,
-                    length
-                );
-                
-                const material = new THREE.MeshPhongMaterial({
-                    color: 0x8B4513,
-                    flatShading: false
-                });
-                
-                const piece = new THREE.Mesh(geometry, material);
-                piece.castShadow = true;
-                piece.receiveShadow = true;
-                
-                // Set initial position
-                piece.position.set(0, this.selectedMaterial.width / 2, 0);
-                
-                // Add metadata
-                piece.userData = {
-                    thickness: this.selectedMaterial.thickness,
-                    width: this.selectedMaterial.width,
-                    length: length,
-                    material: this.selectedMaterial.name,
-                    isActive: true
-                };
-                
-                this.scene.add(piece);
-                this.activePiece = piece;
-                this.isPlacing = true;
-                
-                this.updateInfo();
-            }
-            
-            onMouseMove(event) {
-                // Update mouse position
-                this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-                this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-                
-                if (this.activePiece && this.isPlacing) {
-                    this.updateActivePiecePosition();
-                }
-                
-                // Handle drag operations
-                if (this.isDragging && this.selectedPiece) {
-                    this.handleDragOperation(event);
-                }
-            }
-            
-            updateActivePiecePosition() {
-                this.raycaster.setFromCamera(this.mouse, this.camera);
-                
-                // Create a plane at the current height
-                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.activePiece.position.y);
-                const intersection = new THREE.Vector3();
-                this.raycaster.ray.intersectPlane(plane, intersection);
-                
-                if (intersection) {
-                    // Snap to grid
-                    intersection.x = Math.round(intersection.x / this.gridSize) * this.gridSize;
-                    intersection.z = Math.round(intersection.z / this.gridSize) * this.gridSize;
-                    
-                    this.activePiece.position.x = intersection.x;
-                    this.activePiece.position.z = intersection.z;
-                    
-                    // Show distance measurements
-                    this.showMeasurements(this.activePiece);
-                }
-            }
-            
-            showMeasurements(piece) {
-                // This would show distance lines to nearest objects
-                // For now, we'll just update the info panel
-                const distances = this.calculateDistances(piece);
-                // TODO: Render measurement lines in 3D
-            }
-            
-            calculateDistances(piece) {
-                const distances = {
-                    floor: piece.position.y - piece.userData.width / 2,
-                    nearest: Infinity
-                };
-                
-                // Find nearest piece
-                this.pieces.forEach(other => {
-                    if (other !== piece) {
-                        const dist = piece.position.distanceTo(other.position);
-                        if (dist < distances.nearest) {
-                            distances.nearest = dist;
-                        }
-                    }
-                });
-                
-                return distances;
-            }
-            
-            onMouseDown(event) {
-                if (this.activePiece && this.isPlacing) {
-                    return; // Don't handle other clicks while placing
-                }
-                
-                // Check for piece selection
-                this.raycaster.setFromCamera(this.mouse, this.camera);
-                const intersects = this.raycaster.intersectObjects(this.pieces);
-                
-                if (intersects.length > 0) {
-                    this.selectedPiece = intersects[0].object;
-                    
-                    if (this.keys['t']) {
-                        // Delete mode
-                        this.deletePiece(this.selectedPiece);
-                    } else if (this.keys['f']) {
-                        // Length adjustment mode
-                        this.startLengthAdjustment(event);
-                    } else {
-                        // Start dragging
-                        this.isDragging = true;
-                        this.dragStart = { x: event.clientX, y: event.clientY };
-                    }
-                }
-            }
-            
-            onMouseUp(event) {
-                if (this.activePiece && this.isPlacing) {
-                    // Place the piece
-                    this.activePiece.userData.isActive = false;
-                    this.pieces.push(this.activePiece);
-                    this.activePiece = null;
-                    this.isPlacing = false;
-                    
-                    this.saveState();
-                    this.updateInfo();
-                    this.updateMaterialList();
-                    return;
-                }
-                
-                this.isDragging = false;
-                this.selectedPiece = null;
-            }
-            
-            onKeyDown(event) {
-                this.keys[event.key.toLowerCase()] = true;
-                
-                // Mode indicators
-                if (event.key === 'r') {
-                    this.showMode('ROTER MODUS');
-                } else if (event.key === 'v') {
-                    this.showMode('VERTIKAL MODUS');
-                } else if (event.key === 't') {
-                    this.showMode('SLETT MODUS');
-                } else if (event.key === 'f') {
-                    this.showMode('LENGDE JUSTERING');
-                }
-                
-                // Cancel placement
-                if (event.key === 'Backspace' && this.activePiece) {
-                    this.scene.remove(this.activePiece);
-                    this.activePiece = null;
-                    this.isPlacing = false;
-                }
-                
-                // Number keys for hotbar
-                if (event.key >= '1' && event.key <= '5') {
-                    const index = parseInt(event.key) - 1;
-                    if (this.recentDimensions[index]) {
-                        this.selectMaterial(this.recentDimensions[index]);
-                        const lastLength = this.recentDimensions[index].lastLength || 2400;
-                        document.getElementById('length').value = lastLength;
-                    }
-                }
-                
-                // Camera movement
-                this.handleCameraMovement();
-            }
-            
-            onKeyUp(event) {
-                this.keys[event.key.toLowerCase()] = false;
-                
-                // Hide mode indicator
-                if (['r', 'v', 't', 'f'].includes(event.key)) {
-                    this.hideMode();
-                }
-            }
-            
-            showMode(text) {
-                const indicator = document.getElementById('mode-indicator');
-                indicator.textContent = text;
-                indicator.style.display = 'block';
-            }
-            
-            hideMode() {
-                document.getElementById('mode-indicator').style.display = 'none';
-            }
-            
-            handleCameraMovement() {
-                const speed = 50;
-                const moveVector = new THREE.Vector3();
-                
-                if (this.keys['w']) moveVector.z -= speed;
-                if (this.keys['s']) moveVector.z += speed;
-                if (this.keys['a']) moveVector.x -= speed;
-                if (this.keys['d']) moveVector.x += speed;
-                
-                // Apply camera rotation to movement
-                moveVector.applyQuaternion(this.camera.quaternion);
-                moveVector.y = 0; // Keep movement horizontal
-                
-                this.camera.position.add(moveVector);
-            }
-            
-            onWheel(event) {
-                const zoomSpeed = 0.1;
-                const direction = event.deltaY > 0 ? 1 : -1;
-                const distance = this.camera.position.length();
-                
-                this.camera.position.multiplyScalar(1 + direction * zoomSpeed);
-                
-                event.preventDefault();
-            }
-            
-            handleDragOperation(event) {
-                if (!this.selectedPiece) return;
-                
-                const deltaX = event.clientX - this.dragStart.x;
-                const deltaY = event.clientY - this.dragStart.y;
-                
-                if (this.keys['r']) {
-                    // Rotation mode
-                    if (event.buttons === 1) {
-                        // Left click - horizontal rotation
-                        this.selectedPiece.rotation.y += deltaX * 0.01;
-                    } else if (event.buttons === 2) {
-                        // Right click - vertical rotation
-                        this.selectedPiece.rotation.x += deltaY * 0.01;
-                    }
-                } else if (this.keys['v']) {
-                    // Vertical movement
-                    this.selectedPiece.position.y += -deltaY;
-                } else {
-                    // Normal movement
-                    const moveSpeed = 1;
-                    this.selectedPiece.position.x += deltaX * moveSpeed;
-                    this.selectedPiece.position.z += deltaY * moveSpeed;
-                }
-                
-                this.dragStart = { x: event.clientX, y: event.clientY };
-            }
-            
-            deletePiece(piece) {
-                const index = this.pieces.indexOf(piece);
-                if (index !== -1) {
-                    this.pieces.splice(index, 1);
-                    this.scene.remove(piece);
-                    this.saveState();
-                    this.updateInfo();
-                    this.updateMaterialList();
-                }
-            }
-            
-            updateInfo() {
-                document.getElementById('piece-count').textContent = this.pieces.length;
-                document.getElementById('current-mode').textContent = 
-                    this.isPlacing ? 'Plasserer' : 'Normal';
-            }
-            
-            updateMaterialList() {
-                const summary = {};
-                
-                this.pieces.forEach(piece => {
-                    const key = piece.userData.material;
-                    const length = piece.userData.length;
-                    
-                    if (!summary[key]) {
-                        summary[key] = {
-                            count: 0,
-                            totalLength: 0,
-                            lengths: {}
-                        };
-                    }
-                    
-                    summary[key].count++;
-                    summary[key].totalLength += length;
-                    
-                    if (!summary[key].lengths[length]) {
-                        summary[key].lengths[length] = 0;
-                    }
-                    summary[key].lengths[length]++;
-                });
-                
-                // Update UI
-                const summaryDiv = document.getElementById('material-summary');
-                summaryDiv.innerHTML = '';
-                
-                Object.entries(summary).forEach(([material, data]) => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'material-summary';
-                    
-                    let lengthsText = Object.entries(data.lengths)
-                        .map(([len, count]) => `${count}x ${len}mm`)
-                        .join(', ');
-                    
-                    itemDiv.innerHTML = `
-                        <h4>${material}</h4>
-                        <div>Antall: ${data.count} stk</div>
-                        <div>Total lengde: ${(data.totalLength / 1000).toFixed(1)} m</div>
-                        <div>Lengder: ${lengthsText}</div>
-                    `;
-                    
-                    summaryDiv.appendChild(itemDiv);
-                });
-            }
-            
-            // Project Management
-            createProject() {
-                const name = document.getElementById('new-project-name').value.trim();
-                if (!name) {
-                    alert('Gi prosjektet et navn!');
-                    return;
-                }
-                
-                const projectId = Date.now().toString();
-                this.projects[projectId] = {
-                    id: projectId,
-                    name: name,
-                    created: new Date().toISOString(),
-                    data: {
-                        pieces: [],
-                        camera: {
-                            position: this.camera.position.toArray(),
-                            rotation: this.camera.rotation.toArray()
-                        }
-                    }
-                };
-                
-                this.switchProject(projectId);
-                document.getElementById('new-project-name').value = '';
-            }
-            
-            switchProject(projectId) {
-                // Save current project
-                if (this.currentProject) {
-                    this.saveProject();
-                }
-                
-                // Clear scene
-                this.pieces.forEach(piece => this.scene.remove(piece));
-                this.pieces = [];
-                this.history = [];
-                this.historyIndex = -1;
-                
-                // Load new project
-                this.currentProject = projectId;
-                const project = this.projects[projectId];
-                
-                if (project.data.pieces) {
-                    project.data.pieces.forEach(pieceData => {
-                        this.loadPiece(pieceData);
-                    });
-                }
-                
-                if (project.data.camera) {
-                    this.camera.position.fromArray(project.data.camera.position);
-                    this.camera.rotation.fromArray(project.data.camera.rotation);
-                }
-                
-                this.updateProjectList();
-                this.updateInfo();
-                this.updateMaterialList();
-            }
-            
-            loadPiece(pieceData) {
-                const geometry = new THREE.BoxGeometry(
-                    pieceData.thickness,
-                    pieceData.width,
-                    pieceData.length
-                );
-                
-                const material = new THREE.MeshPhongMaterial({
-                    color: 0x8B4513
-                });
-                
-                const piece = new THREE.Mesh(geometry, material);
-                piece.castShadow = true;
-                piece.receiveShadow = true;
-                
-                piece.position.fromArray(pieceData.position);
-                piece.rotation.fromArray(pieceData.rotation);
-                piece.userData = {
-                    thickness: pieceData.thickness,
-                    width: pieceData.width,
-                    length: pieceData.length,
-                    material: pieceData.material,
-                    isActive: false
-                };
-                
-                this.scene.add(piece);
-                this.pieces.push(piece);
-            }
-            
-            saveProject() {
-                if (!this.currentProject) return;
-                
-                const pieceData = this.pieces.map(piece => ({
-                    thickness: piece.userData.thickness,
-                    width: piece.userData.width,
-                    length: piece.userData.length,
-                    material: piece.userData.material,
-                    position: piece.position.toArray(),
-                    rotation: piece.rotation.toArray()
-                }));
-                
-                this.projects[this.currentProject].data = {
-                    pieces: pieceData,
-                    camera: {
-                        position: this.camera.position.toArray(),
-                        rotation: this.camera.rotation.toArray()
-                    }
-                };
-                
-                this.saveToStorage();
-            }
-            
-            saveToStorage() {
-                localStorage.setItem('woodBuilderProjects', JSON.stringify(this.projects));
-            }
-            
-            loadProjects() {
-                const saved = localStorage.getItem('woodBuilderProjects');
-                if (saved) {
-                    this.projects = JSON.parse(saved);
-                    this.updateProjectList();
-                }
-            }
-            
-            updateProjectList() {
-                const listDiv = document.getElementById('project-list');
-                listDiv.innerHTML = '';
-                
-                Object.values(this.projects).forEach(project => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'project-item';
-                    if (project.id === this.currentProject) {
-                        itemDiv.classList.add('active');
-                    }
-                    
-                    itemDiv.innerHTML = `
-                        <span>${project.name}</span>
-                        <div>
-                            <button onclick="app.switchProject('${project.id}')">Åpne</button>
-                            <button onclick="app.deleteProject('${project.id}')">Slett</button>
-                        </div>
-                    `;
-                    
-                    listDiv.appendChild(itemDiv);
-                });
-            }
-            
-            deleteProject(projectId) {
-                if (confirm('Er du sikker på at du vil slette dette prosjektet?')) {
-                    delete this.projects[projectId];
-                    
-                    if (projectId === this.currentProject) {
-                        this.currentProject = null;
-                        this.pieces.forEach(piece => this.scene.remove(piece));
-                        this.pieces = [];
-                    }
-                    
-                    this.saveToStorage();
-                    this.updateProjectList();
-                    this.updateInfo();
-                }
-            }
+            // Project management
+            projects: {},
+            currentProject: null,
             
             // Undo/Redo
-            saveState() {
-                if (!this.currentProject) return;
-                
-                const state = {
-                    pieces: this.pieces.map(piece => ({
-                        thickness: piece.userData.thickness,
-                        width: piece.userData.width,
-                        length: piece.userData.length,
-                        material: piece.userData.material,
-                        position: piece.position.toArray(),
-                        rotation: piece.rotation.toArray()
-                    }))
-                };
-                
-                // Remove any states after current index
-                this.history = this.history.slice(0, this.historyIndex + 1);
-                
-                // Add new state
-                this.history.push(state);
-                this.historyIndex++;
-                
-                // Limit history size
-                if (this.history.length > 50) {
-                    this.history.shift();
-                    this.historyIndex--;
-                }
-                
-                // Auto-save project
-                this.saveProject();
-            }
+            undoStack: [],
+            redoStack: [],
             
-            undo() {
-                if (this.historyIndex > 0) {
-                    this.historyIndex--;
-                    this.loadState(this.history[this.historyIndex]);
-                }
-            }
+            // Visual helpers
+            snapLine: null,
+            measurementTimeout: null
+        };
+        
+        // Initialize the application
+        function init() {
+            // Setup Three.js
+            app.scene = new THREE.Scene();
+            app.scene.background = new THREE.Color(0xf0f0f0);
             
-            redo() {
-                if (this.historyIndex < this.history.length - 1) {
-                    this.historyIndex++;
-                    this.loadState(this.history[this.historyIndex]);
-                }
-            }
+            // Camera setup (Z is up)
+            app.camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            app.camera.position.set(2, -2, 2);
+            app.camera.lookAt(0, 0, 0);
             
-            loadState(state) {
-                // Clear current pieces
-                this.pieces.forEach(piece => this.scene.remove(piece));
-                this.pieces = [];
+            // Renderer
+            const canvas = document.getElementById('canvas');
+            app.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            app.renderer.setSize(window.innerWidth, window.innerHeight);
+            app.renderer.shadowMap.enabled = true;
+            app.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            app.scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight.position.set(5, -5, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+            app.scene.add(directionalLight);
+            
+            // Ground plane
+            const groundGeometry = new THREE.PlaneGeometry(20, 20);
+            const groundMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xe0e0e0,
+                roughness: 0.8
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal (Z-up system)
+            ground.receiveShadow = true;
+            ground.userData.isGround = true;
+            app.scene.add(ground);
+            
+            // Grid helper (adjusted for Z-up)
+            const gridHelper = new THREE.GridHelper(20, 40, 0x888888, 0xcccccc);
+            gridHelper.rotation.x = Math.PI / 2;
+            app.scene.add(gridHelper);
+            
+            // Initialize UI
+            initializeMaterialPanel();
+            loadProjects();
+            
+            // Event listeners
+            setupEventListeners();
+            
+            // Hide loading
+            document.getElementById('loading').style.display = 'none';
+            
+            // Start render loop
+            animate();
+        }
+        
+        // Initialize material selection panel
+        function initializeMaterialPanel() {
+            const materialList = document.getElementById('materialList');
+            
+            app.woodDimensions.forEach((group, groupIndex) => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'thickness-group';
                 
-                // Load pieces from state
-                state.pieces.forEach(pieceData => {
-                    this.loadPiece(pieceData);
+                const groupTitle = document.createElement('h4');
+                groupTitle.textContent = `${group.thickness}mm Thickness`;
+                groupDiv.appendChild(groupTitle);
+                
+                group.widths.forEach((width, widthIndex) => {
+                    const option = document.createElement('div');
+                    option.className = 'wood-option';
+                    option.dataset.thickness = group.thickness;
+                    option.dataset.width = width;
+                    
+                    // Create visual icon (1:10 scale)
+                    const icon = document.createElement('canvas');
+                    icon.className = 'wood-icon';
+                    icon.width = 40;
+                    icon.height = 40;
+                    const ctx = icon.getContext('2d');
+                    
+                    // Draw cross-section at 1:10 scale
+                    const scale = 0.3;
+                    const t = group.thickness * scale;
+                    const w = width * scale;
+                    
+                    ctx.fillStyle = '#8B6F47';
+                    ctx.fillRect(
+                        (40 - t) / 2,
+                        (40 - w) / 2,
+                        t,
+                        w
+                    );
+                    
+                    ctx.strokeStyle = '#6B5637';
+                    ctx.strokeRect(
+                        (40 - t) / 2,
+                        (40 - w) / 2,
+                        t,
+                        w
+                    );
+                    
+                    const label = document.createElement('div');
+                    label.className = 'wood-label';
+                    label.textContent = `${group.thickness}×${width}mm`;
+                    
+                    option.appendChild(icon);
+                    option.appendChild(label);
+                    
+                    option.addEventListener('click', () => selectWoodDimension(group.thickness, width));
+                    
+                    groupDiv.appendChild(option);
                 });
                 
-                this.updateInfo();
-                this.updateMaterialList();
+                materialList.appendChild(groupDiv);
+            });
+        }
+        
+        // Select wood dimension
+        function selectWoodDimension(thickness, width) {
+            // Update UI
+            document.querySelectorAll('.wood-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            
+            const selected = document.querySelector(
+                `.wood-option[data-thickness="${thickness}"][data-width="${width}"]`
+            );
+            selected.classList.add('active');
+            
+            app.selectedDimension = { thickness, width };
+            
+            // Update recent dimensions
+            const key = `${thickness}x${width}`;
+            app.recentDimensions = app.recentDimensions.filter(d => d !== key);
+            app.recentDimensions.unshift(key);
+            if (app.recentDimensions.length > 10) {
+                app.recentDimensions.pop();
             }
             
-            onResize() {
-                this.camera.aspect = window.innerWidth / window.innerHeight;
-                this.camera.updateProjectionMatrix();
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            // Create new wood piece
+            createWoodPiece(thickness, width);
+        }
+        
+        // Create wood piece
+        function createWoodPiece(thickness, width, length = 500) {
+            // Cancel current active piece if exists
+            if (app.activePiece) {
+                app.scene.remove(app.activePiece);
             }
             
-            animate() {
-                requestAnimationFrame(() => this.animate());
+            // Convert mm to scene units (1 unit = 1 meter)
+            const t = thickness / 1000;
+            const w = width / 1000;
+            const l = length / 1000;
+            
+            // Create geometry with rounded edges
+            const geometry = new THREE.BoxGeometry(t, w, l);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x8B6F47,
+                roughness: 0.7,
+                metalness: 0.1
+            });
+            
+            const piece = new THREE.Mesh(geometry, material);
+            piece.castShadow = true;
+            piece.receiveShadow = true;
+            
+            // Store dimensions in userData
+            piece.userData = {
+                thickness,
+                width,
+                length,
+                isWoodPiece: true,
+                isActive: true
+            };
+            
+            // Position at safe distance from camera
+            const direction = new THREE.Vector3();
+            app.camera.getWorldDirection(direction);
+            piece.position.copy(app.camera.position);
+            piece.position.add(direction.multiplyScalar(1));
+            piece.position.z = Math.max(piece.position.z, l / 2 + 0.1);
+            
+            // Add to scene
+            app.scene.add(piece);
+            app.activePiece = piece;
+            
+            // Update hotkey guide
+            updateHotkeyGuide();
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            // Window resize
+            window.addEventListener('resize', onWindowResize);
+            
+            // Mouse events
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            
+            // Keyboard events
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            
+            // Mouse wheel
+            document.addEventListener('wheel', onMouseWheel);
+        }
+        
+        // Window resize handler
+        function onWindowResize() {
+            app.camera.aspect = window.innerWidth / window.innerHeight;
+            app.camera.updateProjectionMatrix();
+            app.renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Mouse down handler
+        function onMouseDown(event) {
+            if (event.target.id !== 'canvas') return;
+            
+            if (event.button === 0) {
+                app.mouseDown = true;
                 
-                // Handle continuous key actions
-                if (Object.keys(this.keys).some(key => this.keys[key])) {
-                    this.handleCameraMovement();
+                // Check for object interaction
+                updateMouse(event);
+                checkIntersection();
+                
+            } else if (event.button === 2) {
+                app.rightMouseDown = true;
+            }
+            
+            app.lastMouseX = event.clientX;
+            app.lastMouseY = event.clientY;
+            
+            document.getElementById('canvas').classList.add('grabbing');
+        }
+        
+        // Mouse move handler
+        function onMouseMove(event) {
+            const deltaX = event.clientX - app.lastMouseX;
+            const deltaY = event.clientY - app.lastMouseY;
+            
+            if (app.mouseDown && !app.movementAxis && !app.isLengthEditing) {
+                // Camera panning
+                const panSpeed = 0.002;
+                const right = new THREE.Vector3();
+                const up = new THREE.Vector3();
+                
+                app.camera.getWorldDirection(up);
+                right.crossVectors(up, new THREE.Vector3(0, 0, 1)).normalize();
+                up.crossVectors(right, up).normalize();
+                
+                app.camera.position.add(right.multiplyScalar(-deltaX * panSpeed));
+                app.camera.position.add(up.multiplyScalar(deltaY * panSpeed));
+                
+            } else if (app.rightMouseDown) {
+                // Camera orbiting
+                const orbitSpeed = 0.005;
+                const spherical = new THREE.Spherical();
+                const offset = app.camera.position.clone();
+                
+                spherical.setFromVector3(offset);
+                spherical.theta -= deltaX * orbitSpeed;
+                spherical.phi += deltaY * orbitSpeed;
+                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+                
+                app.camera.position.setFromSpherical(spherical);
+                app.camera.lookAt(0, 0, 0);
+                
+            } else if (app.activePiece) {
+                // Move active piece
+                if (app.movementAxis) {
+                    moveAlongAxis(event);
+                } else if (app.isLengthEditing) {
+                    adjustLength(event);
+                }
+            }
+            
+            app.lastMouseX = event.clientX;
+            app.lastMouseY = event.clientY;
+            
+            updateMouse(event);
+        }
+        
+        // Mouse up handler
+        function onMouseUp(event) {
+            if (event.button === 0) {
+                app.mouseDown = false;
+                
+                if (app.activePiece && !app.movementAxis && !app.isLengthEditing) {
+                    // Place the piece
+                    placeActivePiece();
                 }
                 
-                this.renderer.render(this.scene, this.camera);
+                app.movementAxis = null;
+                app.isLengthEditing = false;
+                app.lengthEditFace = null;
+                
+            } else if (event.button === 2) {
+                app.rightMouseDown = false;
+            }
+            
+            document.getElementById('canvas').classList.remove('grabbing');
+            
+            // Clear snap line
+            if (app.snapLine) {
+                app.scene.remove(app.snapLine);
+                app.snapLine = null;
             }
         }
         
-        // Initialize application
-        const app = new WoodBuilderApp();
-        
-        // Prevent right-click context menu on canvas
-        document.addEventListener('contextmenu', (e) => {
-            if (e.target.tagName === 'CANVAS') {
-                e.preventDefault();
+        // Key down handler
+        function onKeyDown(event) {
+            app.keys[event.key.toLowerCase()] = true;
+            
+            // Movement axis controls
+            if (app.activePiece) {
+                if (event.key.toLowerCase() === 'z') {
+                    app.movementAxis = 'z';
+                } else if (event.key.toLowerCase() === 'x') {
+                    app.movementAxis = 'x';
+                } else if (event.key.toLowerCase() === 'c') {
+                    app.movementAxis = 'y';
+                }
+                
+                // Rotation controls
+                if (event.key.toLowerCase() === 'a') {
+                    rotatePiece(app.activePiece, 'z');
+                } else if (event.key.toLowerCase() === 's') {
+                    rotatePiece(app.activePiece, 'x');
+                } else if (event.key.toLowerCase() === 'd') {
+                    rotatePiece(app.activePiece, 'y');
+                }
+                
+                // Cancel placement
+                if (event.key === 'Backspace') {
+                    app.scene.remove(app.activePiece);
+                    app.activePiece = null;
+                    updateHotkeyGuide();
+                }
             }
-        });
+            
+            // Selection controls
+            if (event.key.toLowerCase() === 't' && app.selectedPieces.size > 0) {
+                deleteSelectedPieces();
+            }
+            
+            // Undo/Redo
+            if (event.ctrlKey) {
+                if (event.key.toLowerCase() === 'z') {
+                    event.preventDefault();
+                    undo();
+                } else if (event.key.toLowerCase() === 'y') {
+                    event.preventDefault();
+                    redo();
+                }
+            }
+            
+            // Quick material selection (1-0 keys)
+            const numKey = parseInt(event.key);
+            if (!isNaN(numKey) && numKey >= 0 && numKey <= 9) {
+                const index = numKey === 0 ? 9 : numKey - 1;
+                if (app.recentDimensions[index]) {
+                    const [thickness, width] = app.recentDimensions[index].split('x').map(Number);
+                    selectWoodDimension(thickness, width);
+                }
+            }
+        }
+        
+        // Key up handler
+        function onKeyUp(event) {
+            delete app.keys[event.key.toLowerCase()];
+            
+            // Clear movement axis when key released
+            if (!app.mouseDown) {
+                if (event.key.toLowerCase() === 'z' && app.movementAxis === 'z') {
+                    app.movementAxis = null;
+                } else if (event.key.toLowerCase() === 'x' && app.movementAxis === 'x') {
+                    app.movementAxis = null;
+                } else if (event.key.toLowerCase() === 'c' && app.movementAxis === 'y') {
+                    app.movementAxis = null;
+                }
+            }
+        }
+        
+        // Mouse wheel handler
+        function onMouseWheel(event) {
+            const zoomSpeed = 0.001;
+            const direction = new THREE.Vector3();
+            app.camera.getWorldDirection(direction);
+            
+            app.camera.position.add(direction.multiplyScalar(-event.deltaY * zoomSpeed));
+        }
+        
+        // Update mouse position
+        function updateMouse(event) {
+            app.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            app.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+        
+        // Check for intersections
+        function checkIntersection() {
+            app.raycaster.setFromCamera(app.mouse, app.camera);
+            
+            const objects = app.scene.children.filter(obj => 
+                obj.userData.isWoodPiece && !obj.userData.isActive
+            );
+            
+            const intersects = app.raycaster.intersectObjects(objects);
+            
+            if (intersects.length > 0) {
+                const piece = intersects[0].object;
+                
+                if (app.keys['e']) {
+                    // Duplicate
+                    duplicatePiece(piece);
+                } else if (event.ctrlKey) {
+                    // Multi-select
+                    if (app.selectedPieces.has(piece)) {
+                        app.selectedPieces.delete(piece);
+                        updatePieceSelection(piece, false);
+                    } else {
+                        app.selectedPieces.add(piece);
+                        updatePieceSelection(piece, true);
+                    }
+                } else {
+                    // Single select
+                    clearSelection();
+                    app.selectedPieces.add(piece);
+                    updatePieceSelection(piece, true);
+                }
+                
+                updateHotkeyGuide();
+            }
+        }
+        
+        // Move piece along axis
+        function moveAlongAxis(event) {
+            if (!app.activePiece || !app.movementAxis) return;
+            
+            const movementSpeed = 0.001;
+            const delta = event.clientX - app.lastMouseX;
+            
+            const movement = new THREE.Vector3();
+            if (app.movementAxis === 'x') {
+                movement.x = delta * movementSpeed;
+            } else if (app.movementAxis === 'y') {
+                movement.y = delta * movementSpeed;
+            } else if (app.movementAxis === 'z') {
+                movement.z = -delta * movementSpeed;
+            }
+            
+            app.activePiece.position.add(movement);
+            
+            // Check collisions and snap
+            checkCollisionAndSnap();
+            
+            // Update snap line
+            updateSnapLine();
+        }
+        
+        // Check collision and snap
+        function checkCollisionAndSnap() {
+            if (!app.activePiece) return;
+            
+            const box = new THREE.Box3().setFromObject(app.activePiece);
+            const snapThreshold = 0.01; // 10mm
+            
+            let hasCollision = false;
+            let snapPosition = null;
+            let minDistance = Infinity;
+            
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece && obj !== app.activePiece) {
+                    const targetBox = new THREE.Box3().setFromObject(obj);
+                    
+                    if (box.intersectsBox(targetBox)) {
+                        hasCollision = true;
+                        
+                        // For vertical movement, allow overlap but show red
+                        if (app.movementAxis === 'z') {
+                            app.activePiece.material.color.setHex(0xff0000);
+                        } else {
+                            // Push up to top of collided piece
+                            const overlap = box.min.z - targetBox.max.z;
+                            if (overlap < 0) {
+                                app.activePiece.position.z -= overlap;
+                            }
+                        }
+                    }
+                    
+                    // Check for snap points
+                    if (app.movementAxis) {
+                        const corners = getBoxCorners(targetBox);
+                        corners.forEach(corner => {
+                            const distance = corner[app.movementAxis] - app.activePiece.position[app.movementAxis];
+                            if (Math.abs(distance) < snapThreshold && Math.abs(distance) < Math.abs(minDistance)) {
+                                minDistance = distance;
+                                snapPosition = corner[app.movementAxis];
+                            }
+                        });
+                    }
+                }
+            });
+            
+            // Apply snap
+            if (snapPosition !== null) {
+                app.activePiece.position[app.movementAxis] = snapPosition;
+            }
+            
+            // Reset color if no collision
+            if (!hasCollision) {
+                app.activePiece.material.color.setHex(0x8B6F47);
+            }
+            
+            // Show measurement
+            showMeasurement(minDistance * 1000); // Convert to mm
+        }
+        
+        // Get box corners
+        function getBoxCorners(box) {
+            return [
+                new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+                new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+                new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+                new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+                new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+                new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+                new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+                new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+                // Add midpoints
+                new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z),
+                new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z)
+            ];
+        }
+        
+        // Update snap line
+        function updateSnapLine() {
+            if (!app.activePiece || !app.movementAxis) {
+                if (app.snapLine) {
+                    app.scene.remove(app.snapLine);
+                    app.snapLine = null;
+                }
+                return;
+            }
+            
+            // Remove existing line
+            if (app.snapLine) {
+                app.scene.remove(app.snapLine);
+            }
+            
+            // Create stippled line along movement axis
+            const geometry = new THREE.BufferGeometry();
+            const points = [];
+            const start = app.activePiece.position.clone();
+            const end = start.clone();
+            
+            if (app.movementAxis === 'x') {
+                start.x -= 5;
+                end.x += 5;
+            } else if (app.movementAxis === 'y') {
+                start.y -= 5;
+                end.y += 5;
+            } else if (app.movementAxis === 'z') {
+                start.z -= 5;
+                end.z += 5;
+            }
+            
+            points.push(start, end);
+            geometry.setFromPoints(points);
+            
+            const material = new THREE.LineDashedMaterial({
+                color: 0x0088ff,
+                dashSize: 0.05,
+                gapSize: 0.05
+            });
+            
+            app.snapLine = new THREE.Line(geometry, material);
+            app.snapLine.computeLineDistances();
+            app.scene.add(app.snapLine);
+        }
+        
+        // Adjust piece length
+        function adjustLength(event) {
+            if (!app.activePiece || !app.isLengthEditing) return;
+            
+            const delta = (event.clientX - app.lastMouseX) * 10; // 10mm per pixel
+            const newLength = Math.max(0, app.activePiece.userData.length + delta);
+            
+            // Update geometry
+            const t = app.activePiece.userData.thickness / 1000;
+            const w = app.activePiece.userData.width / 1000;
+            const l = newLength / 1000;
+            
+            app.activePiece.geometry.dispose();
+            app.activePiece.geometry = new THREE.BoxGeometry(t, w, l);
+            app.activePiece.userData.length = newLength;
+            
+            // Show red if will be deleted
+            if (newLength < 10) {
+                app.activePiece.material.color.setHex(0xff0000);
+            } else {
+                app.activePiece.material.color.setHex(0x8B6F47);
+            }
+            
+            // Show measurement
+            showMeasurement(`Length: ${Math.round(newLength)}mm`);
+        }
+        
+        // Rotate piece
+        function rotatePiece(piece, axis) {
+            const rotation = Math.PI / 2;
+            
+            if (axis === 'x') {
+                piece.rotateX(rotation);
+            } else if (axis === 'y') {
+                piece.rotateY(rotation);
+            } else if (axis === 'z') {
+                piece.rotateZ(rotation);
+            }
+            
+            checkCollisionAndSnap();
+        }
+        
+        // Place active piece
+        function placeActivePiece() {
+            if (!app.activePiece) return;
+            
+            // Check if valid position (not red)
+            if (app.activePiece.material.color.getHex() === 0xff0000) {
+                // Cancel placement
+                app.scene.remove(app.activePiece);
+                app.activePiece = null;
+                updateHotkeyGuide();
+                return;
+            }
+            
+            // Mark as placed
+            app.activePiece.userData.isActive = false;
+            
+            // Save state for undo
+            saveState();
+            
+            // Clear active piece
+            app.activePiece = null;
+            
+            // Save project
+            saveCurrentProject();
+            
+            updateHotkeyGuide();
+        }
+        
+        // Duplicate piece
+        function duplicatePiece(original) {
+            const clone = original.clone();
+            clone.userData = { ...original.userData };
+            clone.userData.isActive = true;
+            
+            // Offset slightly
+            clone.position.add(new THREE.Vector3(0.1, 0.1, 0.1));
+            
+            app.scene.add(clone);
+            app.activePiece = clone;
+            
+            updateHotkeyGuide();
+        }
+        
+        // Delete selected pieces
+        function deleteSelectedPieces() {
+            saveState();
+            
+            app.selectedPieces.forEach(piece => {
+                app.scene.remove(piece);
+            });
+            
+            app.selectedPieces.clear();
+            saveCurrentProject();
+            updateHotkeyGuide();
+        }
+        
+        // Clear selection
+        function clearSelection() {
+            app.selectedPieces.forEach(piece => {
+                updatePieceSelection(piece, false);
+            });
+            app.selectedPieces.clear();
+        }
+        
+        // Update piece selection visual
+        function updatePieceSelection(piece, selected) {
+            if (selected) {
+                piece.material = piece.material.clone();
+                piece.material.emissive = new THREE.Color(0xff0000);
+                piece.material.emissiveIntensity = 0.2;
+            } else {
+                piece.material.emissive = new THREE.Color(0x000000);
+                piece.material.emissiveIntensity = 0;
+            }
+        }
+        
+        // Show measurement
+        function showMeasurement(text) {
+            const measurement = document.getElementById('measurement');
+            measurement.textContent = typeof text === 'number' ? `${Math.round(text)}mm` : text;
+            measurement.classList.remove('hidden');
+            
+            clearTimeout(app.measurementTimeout);
+            app.measurementTimeout = setTimeout(() => {
+                measurement.classList.add('hidden');
+            }, 2000);
+        }
+        
+        // Update hotkey guide
+        function updateHotkeyGuide() {
+            const activeGuide = document.getElementById('activeGuide');
+            const selectedGuide = document.getElementById('selectedGuide');
+            
+            if (app.activePiece) {
+                activeGuide.style.display = 'block';
+                selectedGuide.style.display = 'none';
+            } else if (app.selectedPieces.size > 0) {
+                activeGuide.style.display = 'none';
+                selectedGuide.style.display = 'block';
+            } else {
+                activeGuide.style.display = 'none';
+                selectedGuide.style.display = 'none';
+            }
+        }
+        
+        // Project management
+        function loadProjects() {
+            const saved = localStorage.getItem('woodProjects');
+            if (saved) {
+                app.projects = JSON.parse(saved);
+            } else {
+                app.projects = {
+                    'Project 1': { pieces: [] }
+                };
+            }
+            
+            // Load first project
+            const projectNames = Object.keys(app.projects);
+            if (projectNames.length > 0) {
+                loadProject(projectNames[0]);
+            }
+            
+            updateProjectList();
+        }
+        
+        function saveCurrentProject() {
+            if (!app.currentProject) return;
+            
+            const pieces = [];
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece && !obj.userData.isActive) {
+                    pieces.push({
+                        thickness: obj.userData.thickness,
+                        width: obj.userData.width,
+                        length: obj.userData.length,
+                        position: obj.position.toArray(),
+                        rotation: obj.rotation.toArray()
+                    });
+                }
+            });
+            
+            app.projects[app.currentProject] = { pieces };
+            localStorage.setItem('woodProjects', JSON.stringify(app.projects));
+        }
+        
+        function loadProject(name) {
+            // Clear scene
+            const toRemove = [];
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece) {
+                    toRemove.push(obj);
+                }
+            });
+            toRemove.forEach(obj => app.scene.remove(obj));
+            
+            // Load pieces
+            const project = app.projects[name];
+            if (project && project.pieces) {
+                project.pieces.forEach(data => {
+                    const t = data.thickness / 1000;
+                    const w = data.width / 1000;
+                    const l = data.length / 1000;
+                    
+                    const geometry = new THREE.BoxGeometry(t, w, l);
+                    const material = new THREE.MeshStandardMaterial({
+                        color: 0x8B6F47,
+                        roughness: 0.7,
+                        metalness: 0.1
+                    });
+                    
+                    const piece = new THREE.Mesh(geometry, material);
+                    piece.castShadow = true;
+                    piece.receiveShadow = true;
+                    
+                    piece.userData = {
+                        thickness: data.thickness,
+                        width: data.width,
+                        length: data.length,
+                        isWoodPiece: true,
+                        isActive: false
+                    };
+                    
+                    piece.position.fromArray(data.position);
+                    piece.rotation.fromArray(data.rotation);
+                    
+                    app.scene.add(piece);
+                });
+            }
+            
+            app.currentProject = name;
+            updateProjectList();
+        }
+        
+        function updateProjectList() {
+            const projectList = document.getElementById('projectList');
+            projectList.innerHTML = '';
+            
+            Object.keys(app.projects).forEach(name => {
+                const item = document.createElement('div');
+                item.className = 'project-item';
+                if (name === app.currentProject) {
+                    item.classList.add('active');
+                }
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = name;
+                nameSpan.style.cursor = 'pointer';
+                nameSpan.onclick = () => loadProject(name);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteProject(name);
+                };
+                
+                item.appendChild(nameSpan);
+                item.appendChild(deleteBtn);
+                projectList.appendChild(item);
+            });
+        }
+        
+        function createNewProject() {
+            const name = prompt('Project name:', `Project ${Object.keys(app.projects).length + 1}`);
+            if (name && !app.projects[name]) {
+                app.projects[name] = { pieces: [] };
+                saveCurrentProject();
+                loadProject(name);
+            }
+        }
+        
+        function renameProject() {
+            if (!app.currentProject) return;
+            
+            const newName = prompt('New name:', app.currentProject);
+            if (newName && newName !== app.currentProject && !app.projects[newName]) {
+                app.projects[newName] = app.projects[app.currentProject];
+                delete app.projects[app.currentProject];
+                app.currentProject = newName;
+                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
+                updateProjectList();
+            }
+        }
+        
+        function deleteProject(name) {
+            if (Object.keys(app.projects).length <= 1) {
+                alert('Cannot delete the last project');
+                return;
+            }
+            
+            if (confirm(`Delete project "${name}"?`)) {
+                delete app.projects[name];
+                
+                if (name === app.currentProject) {
+                    const remaining = Object.keys(app.projects);
+                    if (remaining.length > 0) {
+                        loadProject(remaining[0]);
+                    }
+                }
+                
+                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
+                updateProjectList();
+            }
+        }
+        
+        // Undo/Redo functionality
+        function saveState() {
+            const state = [];
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece && !obj.userData.isActive) {
+                    state.push({
+                        thickness: obj.userData.thickness,
+                        width: obj.userData.width,
+                        length: obj.userData.length,
+                        position: obj.position.toArray(),
+                        rotation: obj.rotation.toArray()
+                    });
+                }
+            });
+            
+            app.undoStack.push(state);
+            app.redoStack = [];
+            
+            // Limit stack size
+            if (app.undoStack.length > 50) {
+                app.undoStack.shift();
+            }
+        }
+        
+        function undo() {
+            if (app.undoStack.length === 0) return;
+            
+            const currentState = [];
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece && !obj.userData.isActive) {
+                    currentState.push({
+                        thickness: obj.userData.thickness,
+                        width: obj.userData.width,
+                        length: obj.userData.length,
+                        position: obj.position.toArray(),
+                        rotation: obj.rotation.toArray()
+                    });
+                }
+            });
+            
+            app.redoStack.push(currentState);
+            
+            const previousState = app.undoStack.pop();
+            restoreState(previousState);
+        }
+        
+        function redo() {
+            if (app.redoStack.length === 0) return;
+            
+            const nextState = app.redoStack.pop();
+            saveState();
+            restoreState(nextState);
+        }
+        
+        function restoreState(state) {
+            // Clear current pieces
+            const toRemove = [];
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece && !obj.userData.isActive) {
+                    toRemove.push(obj);
+                }
+            });
+            toRemove.forEach(obj => app.scene.remove(obj));
+            
+            // Restore pieces
+            state.forEach(data => {
+                const t = data.thickness / 1000;
+                const w = data.width / 1000;
+                const l = data.length / 1000;
+                
+                const geometry = new THREE.BoxGeometry(t, w, l);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x8B6F47,
+                    roughness: 0.7,
+                    metalness: 0.1
+                });
+                
+                const piece = new THREE.Mesh(geometry, material);
+                piece.castShadow = true;
+                piece.receiveShadow = true;
+                
+                piece.userData = {
+                    thickness: data.thickness,
+                    width: data.width,
+                    length: data.length,
+                    isWoodPiece: true,
+                    isActive: false
+                };
+                
+                piece.position.fromArray(data.position);
+                piece.rotation.fromArray(data.rotation);
+                
+                app.scene.add(piece);
+            });
+            
+            saveCurrentProject();
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            app.renderer.render(app.scene, app.camera);
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', init);
+        
+        // Expose app functions to window for UI
+        window.app = app;
     </script>
 </body>
 </html>
