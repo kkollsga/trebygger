@@ -15,6 +15,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
             user-select: none;
+            background: #1a1a1a;
         }
         
         #canvas {
@@ -30,34 +31,84 @@
             cursor: grabbing;
         }
         
-        /* Material Selection Panel */
-        .material-panel {
+        /* Hamburger Menu Button */
+        .menu-button {
             position: fixed;
             left: 20px;
             top: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            max-height: calc(100vh - 40px);
+            width: 40px;
+            height: 40px;
+            background: rgba(40, 40, 40, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            z-index: 1001;
+            transition: all 0.2s;
+        }
+        
+        .menu-button:hover {
+            background: rgba(60, 60, 60, 0.9);
+        }
+        
+        .menu-button span {
+            width: 24px;
+            height: 2px;
+            background: #fff;
+            transition: all 0.3s;
+        }
+        
+        .menu-button.active span:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+        
+        .menu-button.active span:nth-child(2) {
+            opacity: 0;
+        }
+        
+        .menu-button.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
+        }
+        
+        /* Material Selection Panel */
+        .material-panel {
+            position: fixed;
+            left: -300px;
+            top: 0;
+            background: rgba(40, 40, 40, 0.95);
+            height: 100vh;
+            width: 280px;
+            padding: 80px 20px 20px;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
             overflow-y: auto;
-            width: 200px;
+            transition: left 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .material-panel.active {
+            left: 0;
         }
         
         .material-panel h3 {
             font-size: 14px;
-            margin-bottom: 10px;
-            color: #333;
+            margin-bottom: 15px;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .thickness-group {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
         
         .thickness-group h4 {
             font-size: 12px;
-            color: #666;
-            margin-bottom: 8px;
+            color: #999;
+            margin-bottom: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -65,37 +116,54 @@
         .wood-option {
             display: flex;
             align-items: center;
-            padding: 8px;
-            margin: 4px 0;
-            background: #f5f5f5;
-            border-radius: 6px;
+            padding: 10px;
+            margin: 6px 0;
+            background: rgba(60, 60, 60, 0.6);
+            border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s;
             border: 2px solid transparent;
         }
         
         .wood-option:hover {
-            background: #e8e8e8;
-            transform: translateX(2px);
+            background: rgba(80, 80, 80, 0.6);
+            transform: translateX(4px);
         }
         
         .wood-option.active {
-            background: #e3f2fd;
+            background: rgba(33, 150, 243, 0.2);
             border-color: #2196f3;
         }
         
         .wood-icon {
             width: 40px;
             height: 40px;
-            margin-right: 10px;
-            border: 1px solid #ddd;
+            margin-right: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 4px;
-            background: #fff;
+            background: #2a2a2a;
         }
         
         .wood-label {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 500;
+            color: #fff;
+        }
+        
+        /* Overlay for closing menu */
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            z-index: 999;
+            display: none;
+        }
+        
+        .menu-overlay.active {
+            display: block;
         }
         
         /* Project Controls */
@@ -103,17 +171,20 @@
             position: fixed;
             right: 20px;
             top: 20px;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(40, 40, 40, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             padding: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             width: 200px;
         }
         
         .project-panel h3 {
             font-size: 14px;
             margin-bottom: 10px;
-            color: #333;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .project-list {
@@ -121,34 +192,42 @@
         }
         
         .project-item {
-            padding: 8px;
+            padding: 8px 10px;
             margin: 4px 0;
-            background: #f5f5f5;
+            background: rgba(60, 60, 60, 0.6);
             border-radius: 6px;
             cursor: pointer;
             font-size: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            color: #fff;
+            transition: all 0.2s;
         }
         
         .project-item:hover {
-            background: #e8e8e8;
+            background: rgba(80, 80, 80, 0.6);
         }
         
         .project-item.active {
-            background: #e3f2fd;
+            background: rgba(33, 150, 243, 0.2);
             font-weight: 500;
+            border: 1px solid #2196f3;
         }
         
         .project-item button {
             padding: 2px 6px;
             font-size: 10px;
-            background: #ff5252;
+            background: #d32f2f;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .project-item button:hover {
+            background: #b71c1c;
         }
         
         .project-controls button {
@@ -173,7 +252,8 @@
             position: fixed;
             bottom: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(40, 40, 40, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             color: white;
             padding: 15px;
             border-radius: 12px;
@@ -194,37 +274,41 @@
             font-size: 12px;
             margin-bottom: 5px;
             color: #4fc3f7;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .hotkey {
             display: flex;
             margin: 3px 0;
+            color: #ccc;
         }
         
         .hotkey-key {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
             padding: 2px 6px;
             border-radius: 4px;
             margin-right: 8px;
             font-family: monospace;
             min-width: 20px;
             text-align: center;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         /* Measurement Display */
         .measurement {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(33, 150, 243, 0.9);
             color: white;
-            padding: 8px 12px;
+            padding: 6px 12px;
             border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
+            font-size: 13px;
+            font-weight: 600;
             pointer-events: none;
             transition: opacity 0.2s;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
         
         .measurement.hidden {
@@ -238,13 +322,23 @@
             left: 50%;
             transform: translate(-50%, -50%);
             font-size: 18px;
-            color: #666;
+            color: #999;
         }
     </style>
 </head>
 <body>
     <div class="loading" id="loading">Loading 3D environment...</div>
     <canvas id="canvas"></canvas>
+    
+    <!-- Hamburger Menu Button -->
+    <div class="menu-button" id="menuButton" onclick="toggleMenu()">
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+    
+    <!-- Menu Overlay -->
+    <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()"></div>
     
     <!-- Material Selection Panel -->
     <div class="material-panel" id="materialPanel">
@@ -266,9 +360,9 @@
     <div class="hotkey-guide" id="hotkeyGuide">
         <div class="hotkey-group" id="activeGuide" style="display: none;">
             <h4>Active Piece</h4>
-            <div class="hotkey"><span class="hotkey-key">Z</span> Move along Z axis</div>
-            <div class="hotkey"><span class="hotkey-key">X</span> Move along X axis</div>
-            <div class="hotkey"><span class="hotkey-key">C</span> Move along Y axis</div>
+            <div class="hotkey"><span class="hotkey-key">Z</span> Move along Z axis (hold)</div>
+            <div class="hotkey"><span class="hotkey-key">X</span> Move along X axis (hold)</div>
+            <div class="hotkey"><span class="hotkey-key">C</span> Move along Y axis (hold)</div>
             <div class="hotkey"><span class="hotkey-key">V</span> + Click end to adjust length</div>
             <div class="hotkey"><span class="hotkey-key">A</span> Rotate around Z</div>
             <div class="hotkey"><span class="hotkey-key">S</span> Rotate around X</div>
@@ -318,6 +412,12 @@
             lastMouseX: 0,
             lastMouseY: 0,
             
+            // Camera state
+            cameraDistance: 3,
+            cameraTheta: Math.PI / 4,
+            cameraPhi: Math.PI / 3,
+            cameraTarget: new THREE.Vector3(0, 0, 0),
+            
             // Wood dimensions (thickness x width in mm)
             woodDimensions: [
                 // Group by thickness
@@ -341,14 +441,37 @@
             
             // Visual helpers
             snapLine: null,
-            measurementTimeout: null
+            measurementTimeout: null,
+            measurementElement: null
         };
+        
+        // Menu toggle functions
+        function toggleMenu() {
+            const panel = document.getElementById('materialPanel');
+            const button = document.getElementById('menuButton');
+            const overlay = document.getElementById('menuOverlay');
+            
+            panel.classList.toggle('active');
+            button.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+        
+        function closeMenu() {
+            const panel = document.getElementById('materialPanel');
+            const button = document.getElementById('menuButton');
+            const overlay = document.getElementById('menuOverlay');
+            
+            panel.classList.remove('active');
+            button.classList.remove('active');
+            overlay.classList.remove('active');
+        }
         
         // Initialize the application
         function init() {
             // Setup Three.js
             app.scene = new THREE.Scene();
-            app.scene.background = new THREE.Color(0xf0f0f0);
+            app.scene.background = new THREE.Color(0x1a1a1a);
+            app.scene.fog = new THREE.Fog(0x1a1a1a, 10, 50);
             
             // Camera setup (Z is up)
             app.camera = new THREE.PerspectiveCamera(
@@ -357,8 +480,7 @@
                 0.1,
                 1000
             );
-            app.camera.position.set(2, -2, 2);
-            app.camera.lookAt(0, 0, 0);
+            updateCameraPosition();
             
             // Renderer
             const canvas = document.getElementById('canvas');
@@ -368,38 +490,45 @@
             app.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             
             // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
             app.scene.add(ambientLight);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
             directionalLight.position.set(5, -5, 10);
             directionalLight.castShadow = true;
             directionalLight.shadow.camera.left = -10;
             directionalLight.shadow.camera.right = 10;
             directionalLight.shadow.camera.top = 10;
             directionalLight.shadow.camera.bottom = -10;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
             app.scene.add(directionalLight);
             
-            // Ground plane
-            const groundGeometry = new THREE.PlaneGeometry(20, 20);
+            // Ground plane (solid gray)
+            const groundGeometry = new THREE.BoxGeometry(40, 40, 0.1);
             const groundMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0xe0e0e0,
-                roughness: 0.8
+                color: 0x4a4a4a,
+                roughness: 0.9,
+                metalness: 0.1
             });
             const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-            ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal (Z-up system)
+            ground.position.z = -0.05;
             ground.receiveShadow = true;
             ground.userData.isGround = true;
             app.scene.add(ground);
             
-            // Grid helper (adjusted for Z-up)
-            const gridHelper = new THREE.GridHelper(20, 40, 0x888888, 0xcccccc);
+            // Add subtle grid on top of ground
+            const gridHelper = new THREE.GridHelper(40, 80, 0x555555, 0x3a3a3a);
             gridHelper.rotation.x = Math.PI / 2;
+            gridHelper.position.z = 0.001;
             app.scene.add(gridHelper);
             
             // Initialize UI
             initializeMaterialPanel();
             loadProjects();
+            
+            // Create measurement element
+            app.measurementElement = document.getElementById('measurement');
             
             // Event listeners
             setupEventListeners();
@@ -409,6 +538,14 @@
             
             // Start render loop
             animate();
+        }
+        
+        // Update camera position based on spherical coordinates
+        function updateCameraPosition() {
+            app.camera.position.x = app.cameraTarget.x + app.cameraDistance * Math.sin(app.cameraTheta) * Math.sin(app.cameraPhi);
+            app.camera.position.y = app.cameraTarget.y + app.cameraDistance * Math.cos(app.cameraTheta) * Math.sin(app.cameraPhi);
+            app.camera.position.z = app.cameraTarget.z + app.cameraDistance * Math.cos(app.cameraPhi);
+            app.camera.lookAt(app.cameraTarget);
         }
         
         // Initialize material selection panel
@@ -464,7 +601,10 @@
                     option.appendChild(icon);
                     option.appendChild(label);
                     
-                    option.addEventListener('click', () => selectWoodDimension(group.thickness, width));
+                    option.addEventListener('click', () => {
+                        selectWoodDimension(group.thickness, width);
+                        closeMenu();
+                    });
                     
                     groupDiv.appendChild(option);
                 });
@@ -483,7 +623,9 @@
             const selected = document.querySelector(
                 `.wood-option[data-thickness="${thickness}"][data-width="${width}"]`
             );
-            selected.classList.add('active');
+            if (selected) {
+                selected.classList.add('active');
+            }
             
             app.selectedDimension = { thickness, width };
             
@@ -511,7 +653,7 @@
             const w = width / 1000;
             const l = length / 1000;
             
-            // Create geometry with rounded edges
+            // Create geometry with rounded edges effect
             const geometry = new THREE.BoxGeometry(t, w, l);
             const material = new THREE.MeshStandardMaterial({
                 color: 0x8B6F47,
@@ -532,12 +674,12 @@
                 isActive: true
             };
             
-            // Position at safe distance from camera
-            const direction = new THREE.Vector3();
-            app.camera.getWorldDirection(direction);
-            piece.position.copy(app.camera.position);
-            piece.position.add(direction.multiplyScalar(1));
-            piece.position.z = Math.max(piece.position.z, l / 2 + 0.1);
+            // Position on the floor
+            piece.position.set(
+                app.cameraTarget.x,
+                app.cameraTarget.y,
+                l / 2
+            );
             
             // Add to scene
             app.scene.add(piece);
@@ -580,9 +722,29 @@
             if (event.button === 0) {
                 app.mouseDown = true;
                 
-                // Check for object interaction
-                updateMouse(event);
-                checkIntersection();
+                // Check for V key for length editing
+                if (app.keys['v'] && app.activePiece) {
+                    // Check if clicking on end face
+                    updateMouse(event);
+                    app.raycaster.setFromCamera(app.mouse, app.camera);
+                    const intersects = app.raycaster.intersectObject(app.activePiece);
+                    
+                    if (intersects.length > 0) {
+                        const face = intersects[0].face;
+                        const normal = face.normal.clone();
+                        normal.transformDirection(app.activePiece.matrixWorld);
+                        
+                        // Check if clicking on Z-aligned face (end faces)
+                        if (Math.abs(normal.z) > 0.9) {
+                            app.isLengthEditing = true;
+                            app.lengthEditFace = normal.z > 0 ? 'top' : 'bottom';
+                        }
+                    }
+                } else {
+                    // Check for object interaction
+                    updateMouse(event);
+                    checkIntersection(event);
+                }
                 
             } else if (event.button === 2) {
                 app.rightMouseDown = true;
@@ -599,40 +761,34 @@
             const deltaX = event.clientX - app.lastMouseX;
             const deltaY = event.clientY - app.lastMouseY;
             
-            if (app.mouseDown && !app.movementAxis && !app.isLengthEditing) {
+            if (app.activePiece && app.movementAxis) {
+                // Move active piece along axis
+                moveAlongAxis(event);
+            } else if (app.activePiece && app.isLengthEditing) {
+                // Adjust length
+                adjustLength(event);
+            } else if (app.mouseDown && !app.keys['z'] && !app.keys['x'] && !app.keys['c'] && !app.keys['v']) {
                 // Camera panning
-                const panSpeed = 0.002;
+                const panSpeed = 0.003;
                 const right = new THREE.Vector3();
-                const up = new THREE.Vector3();
+                const forward = new THREE.Vector3();
                 
-                app.camera.getWorldDirection(up);
-                right.crossVectors(up, new THREE.Vector3(0, 0, 1)).normalize();
-                up.crossVectors(right, up).normalize();
+                app.camera.getWorldDirection(forward);
+                forward.z = 0;
+                forward.normalize();
+                right.crossVectors(forward, new THREE.Vector3(0, 0, 1)).normalize();
                 
-                app.camera.position.add(right.multiplyScalar(-deltaX * panSpeed));
-                app.camera.position.add(up.multiplyScalar(deltaY * panSpeed));
+                app.cameraTarget.add(right.multiplyScalar(-deltaX * panSpeed));
+                app.cameraTarget.add(forward.multiplyScalar(deltaY * panSpeed));
+                updateCameraPosition();
                 
             } else if (app.rightMouseDown) {
-                // Camera orbiting
+                // Camera orbiting (no head tilting)
                 const orbitSpeed = 0.005;
-                const spherical = new THREE.Spherical();
-                const offset = app.camera.position.clone();
+                app.cameraTheta -= deltaX * orbitSpeed;
+                app.cameraPhi = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, app.cameraPhi)); // Prevent tilting past horizontal
                 
-                spherical.setFromVector3(offset);
-                spherical.theta -= deltaX * orbitSpeed;
-                spherical.phi += deltaY * orbitSpeed;
-                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-                
-                app.camera.position.setFromSpherical(spherical);
-                app.camera.lookAt(0, 0, 0);
-                
-            } else if (app.activePiece) {
-                // Move active piece
-                if (app.movementAxis) {
-                    moveAlongAxis(event);
-                } else if (app.isLengthEditing) {
-                    adjustLength(event);
-                }
+                updateCameraPosition();
             }
             
             app.lastMouseX = event.clientX;
@@ -651,7 +807,6 @@
                     placeActivePiece();
                 }
                 
-                app.movementAxis = null;
                 app.isLengthEditing = false;
                 app.lengthEditFace = null;
                 
@@ -666,50 +821,60 @@
                 app.scene.remove(app.snapLine);
                 app.snapLine = null;
             }
+            
+            // Hide measurement
+            hideMeasurement();
         }
         
         // Key down handler
         function onKeyDown(event) {
-            app.keys[event.key.toLowerCase()] = true;
+            const key = event.key.toLowerCase();
+            app.keys[key] = true;
             
-            // Movement axis controls
-            if (app.activePiece) {
-                if (event.key.toLowerCase() === 'z') {
+            // Movement axis controls - set axis while key is held
+            if (app.activePiece && app.mouseDown) {
+                if (key === 'z') {
                     app.movementAxis = 'z';
-                } else if (event.key.toLowerCase() === 'x') {
+                    updateSnapLine();
+                } else if (key === 'x') {
                     app.movementAxis = 'x';
-                } else if (event.key.toLowerCase() === 'c') {
+                    updateSnapLine();
+                } else if (key === 'c') {
                     app.movementAxis = 'y';
-                }
-                
-                // Rotation controls
-                if (event.key.toLowerCase() === 'a') {
-                    rotatePiece(app.activePiece, 'z');
-                } else if (event.key.toLowerCase() === 's') {
-                    rotatePiece(app.activePiece, 'x');
-                } else if (event.key.toLowerCase() === 'd') {
-                    rotatePiece(app.activePiece, 'y');
-                }
-                
-                // Cancel placement
-                if (event.key === 'Backspace') {
-                    app.scene.remove(app.activePiece);
-                    app.activePiece = null;
-                    updateHotkeyGuide();
+                    updateSnapLine();
                 }
             }
             
+            // Rotation controls
+            if (app.activePiece && !event.repeat) {
+                if (key === 'a') {
+                    rotatePiece(app.activePiece, 'z');
+                } else if (key === 's') {
+                    rotatePiece(app.activePiece, 'x');
+                } else if (key === 'd') {
+                    rotatePiece(app.activePiece, 'y');
+                }
+            }
+            
+            // Cancel placement
+            if (key === 'backspace' && app.activePiece) {
+                app.scene.remove(app.activePiece);
+                app.activePiece = null;
+                updateHotkeyGuide();
+                hideMeasurement();
+            }
+            
             // Selection controls
-            if (event.key.toLowerCase() === 't' && app.selectedPieces.size > 0) {
+            if (key === 't' && app.selectedPieces.size > 0) {
                 deleteSelectedPieces();
             }
             
             // Undo/Redo
             if (event.ctrlKey) {
-                if (event.key.toLowerCase() === 'z') {
+                if (key === 'z') {
                     event.preventDefault();
                     undo();
-                } else if (event.key.toLowerCase() === 'y') {
+                } else if (key === 'y') {
                     event.preventDefault();
                     redo();
                 }
@@ -728,27 +893,31 @@
         
         // Key up handler
         function onKeyUp(event) {
-            delete app.keys[event.key.toLowerCase()];
+            const key = event.key.toLowerCase();
+            delete app.keys[key];
             
             // Clear movement axis when key released
-            if (!app.mouseDown) {
-                if (event.key.toLowerCase() === 'z' && app.movementAxis === 'z') {
-                    app.movementAxis = null;
-                } else if (event.key.toLowerCase() === 'x' && app.movementAxis === 'x') {
-                    app.movementAxis = null;
-                } else if (event.key.toLowerCase() === 'c' && app.movementAxis === 'y') {
-                    app.movementAxis = null;
+            if ((key === 'z' && app.movementAxis === 'z') ||
+                (key === 'x' && app.movementAxis === 'x') ||
+                (key === 'c' && app.movementAxis === 'y')) {
+                app.movementAxis = null;
+                
+                // Clear snap line
+                if (app.snapLine) {
+                    app.scene.remove(app.snapLine);
+                    app.snapLine = null;
                 }
+                
+                hideMeasurement();
             }
         }
         
         // Mouse wheel handler
         function onMouseWheel(event) {
             const zoomSpeed = 0.001;
-            const direction = new THREE.Vector3();
-            app.camera.getWorldDirection(direction);
-            
-            app.camera.position.add(direction.multiplyScalar(-event.deltaY * zoomSpeed));
+            app.cameraDistance += event.deltaY * zoomSpeed;
+            app.cameraDistance = Math.max(0.5, Math.min(20, app.cameraDistance));
+            updateCameraPosition();
         }
         
         // Update mouse position
@@ -758,7 +927,7 @@
         }
         
         // Check for intersections
-        function checkIntersection() {
+        function checkIntersection(event) {
             app.raycaster.setFromCamera(app.mouse, app.camera);
             
             const objects = app.scene.children.filter(obj => 
@@ -790,6 +959,10 @@
                 }
                 
                 updateHotkeyGuide();
+            } else {
+                // Click on empty space - clear selection
+                clearSelection();
+                updateHotkeyGuide();
             }
         }
         
@@ -797,7 +970,7 @@
         function moveAlongAxis(event) {
             if (!app.activePiece || !app.movementAxis) return;
             
-            const movementSpeed = 0.001;
+            const movementSpeed = 0.002;
             const delta = event.clientX - app.lastMouseX;
             
             const movement = new THREE.Vector3();
@@ -812,15 +985,17 @@
             app.activePiece.position.add(movement);
             
             // Check collisions and snap
-            checkCollisionAndSnap();
+            const snapInfo = checkCollisionAndSnap();
             
-            // Update snap line
-            updateSnapLine();
+            // Update measurement display position
+            if (snapInfo && snapInfo.distance !== null) {
+                updateMeasurementPosition(snapInfo.position);
+            }
         }
         
         // Check collision and snap
         function checkCollisionAndSnap() {
-            if (!app.activePiece) return;
+            if (!app.activePiece) return null;
             
             const box = new THREE.Box3().setFromObject(app.activePiece);
             const snapThreshold = 0.01; // 10mm
@@ -828,6 +1003,7 @@
             let hasCollision = false;
             let snapPosition = null;
             let minDistance = Infinity;
+            let measurementPosition = null;
             
             app.scene.traverse((obj) => {
                 if (obj.userData.isWoodPiece && obj !== app.activePiece) {
@@ -856,6 +1032,10 @@
                             if (Math.abs(distance) < snapThreshold && Math.abs(distance) < Math.abs(minDistance)) {
                                 minDistance = distance;
                                 snapPosition = corner[app.movementAxis];
+                                
+                                // Calculate measurement position (midpoint along axis)
+                                measurementPosition = app.activePiece.position.clone();
+                                measurementPosition[app.movementAxis] = (app.activePiece.position[app.movementAxis] + corner[app.movementAxis]) / 2;
                             }
                         });
                     }
@@ -873,7 +1053,12 @@
             }
             
             // Show measurement
-            showMeasurement(minDistance * 1000); // Convert to mm
+            if (Math.abs(minDistance) < Infinity) {
+                showMeasurement(Math.abs(minDistance) * 1000); // Convert to mm
+                return { distance: minDistance, position: measurementPosition };
+            }
+            
+            return null;
         }
         
         // Get box corners
@@ -889,7 +1074,11 @@
                 new THREE.Vector3(box.max.x, box.max.y, box.max.z),
                 // Add midpoints
                 new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z),
-                new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z)
+                new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z),
+                new THREE.Vector3(box.min.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
+                new THREE.Vector3(box.max.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
+                new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2),
+                new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2)
             ];
         }
         
@@ -921,17 +1110,19 @@
                 start.y -= 5;
                 end.y += 5;
             } else if (app.movementAxis === 'z') {
-                start.z -= 5;
-                end.z += 5;
+                start.z = 0;
+                end.z = 10;
             }
             
             points.push(start, end);
             geometry.setFromPoints(points);
             
             const material = new THREE.LineDashedMaterial({
-                color: 0x0088ff,
+                color: 0x2196f3,
                 dashSize: 0.05,
-                gapSize: 0.05
+                gapSize: 0.05,
+                opacity: 0.8,
+                transparent: true
             });
             
             app.snapLine = new THREE.Line(geometry, material);
@@ -944,26 +1135,35 @@
             if (!app.activePiece || !app.isLengthEditing) return;
             
             const delta = (event.clientX - app.lastMouseX) * 10; // 10mm per pixel
-            const newLength = Math.max(0, app.activePiece.userData.length + delta);
+            const sign = app.lengthEditFace === 'top' ? 1 : -1;
+            const newLength = Math.max(0, app.activePiece.userData.length + delta * sign);
+            
+            // Snap to 10mm increments
+            const snappedLength = Math.round(newLength / 10) * 10;
             
             // Update geometry
             const t = app.activePiece.userData.thickness / 1000;
             const w = app.activePiece.userData.width / 1000;
-            const l = newLength / 1000;
+            const l = snappedLength / 1000;
             
             app.activePiece.geometry.dispose();
             app.activePiece.geometry = new THREE.BoxGeometry(t, w, l);
-            app.activePiece.userData.length = newLength;
+            app.activePiece.userData.length = snappedLength;
+            
+            // Adjust position to keep bottom face in place
+            if (app.lengthEditFace === 'bottom') {
+                app.activePiece.position.z = l / 2;
+            }
             
             // Show red if will be deleted
-            if (newLength < 10) {
+            if (snappedLength < 10) {
                 app.activePiece.material.color.setHex(0xff0000);
             } else {
                 app.activePiece.material.color.setHex(0x8B6F47);
             }
             
             // Show measurement
-            showMeasurement(`Length: ${Math.round(newLength)}mm`);
+            showMeasurement(`Length: ${snappedLength}mm`);
         }
         
         // Rotate piece
@@ -1002,6 +1202,7 @@
             
             // Clear active piece
             app.activePiece = null;
+            app.movementAxis = null;
             
             // Save project
             saveCurrentProject();
@@ -1012,6 +1213,7 @@
         // Duplicate piece
         function duplicatePiece(original) {
             const clone = original.clone();
+            clone.material = original.material.clone();
             clone.userData = { ...original.userData };
             clone.userData.isActive = true;
             
@@ -1048,7 +1250,7 @@
         // Update piece selection visual
         function updatePieceSelection(piece, selected) {
             if (selected) {
-                piece.material = piece.material.clone();
+                // Create outline effect with emissive
                 piece.material.emissive = new THREE.Color(0xff0000);
                 piece.material.emissiveIntensity = 0.2;
             } else {
@@ -1059,7 +1261,7 @@
         
         // Show measurement
         function showMeasurement(text) {
-            const measurement = document.getElementById('measurement');
+            const measurement = app.measurementElement;
             measurement.textContent = typeof text === 'number' ? `${Math.round(text)}mm` : text;
             measurement.classList.remove('hidden');
             
@@ -1067,6 +1269,28 @@
             app.measurementTimeout = setTimeout(() => {
                 measurement.classList.add('hidden');
             }, 2000);
+        }
+        
+        // Hide measurement
+        function hideMeasurement() {
+            const measurement = app.measurementElement;
+            measurement.classList.add('hidden');
+            clearTimeout(app.measurementTimeout);
+        }
+        
+        // Update measurement position
+        function updateMeasurementPosition(worldPosition) {
+            if (!worldPosition) return;
+            
+            const screenPosition = worldPosition.clone();
+            screenPosition.project(app.camera);
+            
+            const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-screenPosition.y * 0.5 + 0.5) * window.innerHeight;
+            
+            app.measurementElement.style.left = `${x}px`;
+            app.measurementElement.style.top = `${y}px`;
+            app.measurementElement.style.transform = 'translate(-50%, -50%)';
         }
         
         // Update hotkey guide
@@ -1135,6 +1359,9 @@
                 }
             });
             toRemove.forEach(obj => app.scene.remove(obj));
+            
+            // Clear selection
+            clearSelection();
             
             // Load pieces
             const project = app.projects[name];
@@ -1310,6 +1537,9 @@
             });
             toRemove.forEach(obj => app.scene.remove(obj));
             
+            // Clear selection
+            clearSelection();
+            
             // Restore pieces
             state.forEach(data => {
                 const t = data.thickness / 1000;
@@ -1347,6 +1577,9 @@
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
+            
+            // Update any animations or dynamic elements here
+            
             app.renderer.render(app.scene, app.camera);
         }
         
