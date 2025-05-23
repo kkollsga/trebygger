@@ -828,6 +828,11 @@
         }
         
         function onMouseMove(event) {
+            // Guard against calls before camera is initialized
+            if (!app.camera || !app.renderer) {
+                return;
+            }
+
             const deltaX = event.clientX - app.lastMouseX;
             const deltaY = event.clientY - app.lastMouseY;
             
@@ -835,26 +840,25 @@
 
             if (app.isDraggingPiece) {
                  if (app.movementAxis) {
-                    moveSelectedAlongAxis(event); // Pass full event for consistency if needed
+                    moveSelectedAlongAxis(event); 
                  } else if (app.selectedPieces.size > 0 && app.mouseDown) {
-                    // Free drag if no axis key is pressed but dragging started on a piece
-                    // This is a bit more complex, involves projecting mouse movement onto a plane.
-                    // For now, let's require axis keys for explicit movement.
-                    // Or, if drag started on a piece, initiate a planar drag (e.g., on XY plane at piece height)
-                    // This part is not explicitly requested to change, so keeping simple.
+                    // Placeholder for potential free-drag logic if needed in future
                  }
             } else if (app.isLengthEditing) {
                 adjustLength(event);
             } else if (app.mouseDown && !app.movementAxis) { // Left mouse drag - Panning
-                const panSpeed = 0.003 * app.cameraDistance / 3; // Scale pan speed with zoom
-                const right = new THREE.Vector3();
-                const up = new THREE.Vector3(); // Use camera's local up for panning relative to view
+                const panSpeed = 0.003 * app.cameraDistance / 3;
+                const panVector = new THREE.Vector3();
 
-                app.camera.getWorldDirection(new THREE.Vector3()); // Ensure matrixWorld is updated
-                right.copy(app.camera.right).multiplyScalar(-deltaX * panSpeed);
-                up.copy(app.camera.up).multiplyScalar(deltaY * panSpeed);
+                // Get camera's local X-axis in world space (camera's "right")
+                const cameraWorldX = new THREE.Vector3().setFromMatrixColumn(app.camera.matrixWorld, 0);
+                panVector.addScaledVector(cameraWorldX, -deltaX * panSpeed);
+
+                // Get camera's local Y-axis in world space (camera's "up")
+                const cameraWorldY = new THREE.Vector3().setFromMatrixColumn(app.camera.matrixWorld, 1);
+                panVector.addScaledVector(cameraWorldY, deltaY * panSpeed); // Positive deltaY (mouse down) moves target "up" (camera view down)
                 
-                app.cameraTarget.add(right).add(up);
+                app.cameraTarget.add(panVector);
                 updateCameraPosition();
                 
             } else if (app.rightMouseDown) { // Right mouse drag - Orbiting
@@ -862,7 +866,6 @@
                 app.cameraTheta -= deltaX * orbitSpeed; // Azimuthal angle
                 app.cameraPhi -= deltaY * orbitSpeed;   // Polar angle
                 
-                // Clamp phi to prevent looking straight up/down or flipping over
                 app.cameraPhi = Math.max(0.01, Math.min(Math.PI - 0.01, app.cameraPhi));
                 
                 updateCameraPosition();
@@ -881,20 +884,11 @@
                     saveCurrentProject();
                 }
                 
-                // If dragging piece without an axis key, and it was just a click for selection, don't clear drag state
-                if (!app.movementAxis && app.isDraggingPiece) {
-                    // Check if it was a short drag (click) or actual drag
-                    // For simplicity, always reset if not in axis mode
-                }
-
                 app.isDraggingPiece = false;
-                // app.dragStartPos = null; // Keep for potential snapping on release if needed later
                 app.initialPiecePositions.clear();
 
-                if (app.isLengthEditing) { // Finalize length editing
+                if (app.isLengthEditing) { 
                     if (app.lengthEditPiece && app.lengthEditPiece.userData.length < 10) {
-                         // This case should be handled by min length in adjustLength
-                         // If it somehow results in <10mm, consider deleting or reverting
                         showStatus(`Piece length too small (${app.lengthEditPiece.userData.length}mm), reverting may be needed.`);
                     }
                     app.isLengthEditing = false;
@@ -919,17 +913,15 @@
                 let newAxis = null;
                 if (key === 'z') newAxis = 'z';
                 else if (key === 'x') newAxis = 'x';
-                else if (key === 'c') newAxis = 'y'; // 'c' for Y-axis
+                else if (key === 'c') newAxis = 'y'; 
 
                 if (newAxis) {
                     app.movementAxis = newAxis;
                     updateSnapLines();
                     showStatus(`${newAxis.toUpperCase()}-axis movement mode`);
                     updateHotkeyGuide();
-                    // If mouse is already down on a selected piece, start dragging immediately
                     if (app.mouseDown && app.selectedPieces.size > 0) {
-                        let pieceUnderMouse = false;
-                        app.raycaster.setFromCamera(app.mouse, app.camera);
+                        app.raycaster.setFromCamera(app.mouse, app.camera); // Ensure raycaster is current
                         const intersects = app.raycaster.intersectObjects(Array.from(app.selectedPieces));
                         if (intersects.length > 0) {
                              app.isDraggingPiece = true;
@@ -974,12 +966,12 @@
                 (key === 'x' && app.movementAxis === 'x') ||
                 (key === 'c' && app.movementAxis === 'y')) {
                 
-                if (app.isDraggingPiece) { // If actively dragging when axis key is released
+                if (app.isDraggingPiece) { 
                     saveState();
                     saveCurrentProject();
                 }
                 app.movementAxis = null;
-                app.isDraggingPiece = false; // Stop dragging when axis key is released
+                app.isDraggingPiece = false; 
                 clearSnapLines();
                 hideMeasurement();
                 updateHotkeyGuide();
@@ -987,8 +979,8 @@
         }
         
         function onMouseWheel(event) {
-            const zoomSpeed = 0.1; // Adjusted for more intuitive zoom
-            app.cameraDistance *= (1 + event.deltaY * -zoomSpeed * 0.01); // Multiplicative zoom
+            const zoomSpeed = 0.1; 
+            app.cameraDistance *= (1 + event.deltaY * -zoomSpeed * 0.01); 
             app.cameraDistance = Math.max(0.5, Math.min(20, app.cameraDistance));
             updateCameraPosition();
         }
@@ -1003,9 +995,8 @@
 
             app.raycaster.setFromCamera(app.mouse, app.camera);
             
-            // Create a plane for dragging based on the initial drag point and camera view
             const planeNormal = new THREE.Vector3();
-            app.camera.getWorldDirection(planeNormal); // Normal to the screen
+            app.camera.getWorldDirection(planeNormal); 
             const dragPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, app.dragStartPos);
             
             const intersectPoint = new THREE.Vector3();
@@ -1017,30 +1008,25 @@
                 let finalMovement = new THREE.Vector3();
                 finalMovement[app.movementAxis] = worldDelta[app.movementAxis];
 
-                // --- Floor Collision and Snap to Floor (for Z-axis movement) ---
                 if (app.movementAxis === 'z') {
-                    let minRequiredZCorrection = 0; // How much upward correction is needed to prevent going below floor
+                    let minRequiredZCorrection = 0; 
                     let currentLowestProjectedZ = Infinity;
 
                     app.selectedPieces.forEach(piece => {
                         const initialPos = app.initialPiecePositions.get(piece);
                         if (!initialPos) return;
-
-                        const pieceBox = new THREE.Box3().setFromObject(piece); // Get current bounding box
-                        // To get the correct min Z, we need to consider the piece's geometry relative to its origin
-                        // The Box3 from object already accounts for this.
-                        // We need the min Z of the piece if it were at its *original* drag start position + finalMovement
-                        const originalPieceBox = new THREE.Box3();
-                        originalPieceBox.copy(piece.geometry.boundingBox).applyMatrix4(piece.matrixWorld);
-                        // This is complex if pieces are rotated. Simpler: use initialPiecePositions.
-                        // The pieceBox.min.z is world min Z.
-                        // The piece's height is piece.geometry.parameters.depth (if Z is length)
                         
-                        // Calculate the piece's bounding box if it were at its initial drag position
-                        const tempMatrix = new THREE.Matrix4().compose(initialPos, piece.quaternion, piece.scale);
-                        const checkBox = piece.geometry.boundingBox.clone().applyMatrix4(tempMatrix);
+                        // For accurate floor collision, we need the piece's bounding box at its *new potential position*
+                        // before floor correction. The piece's origin is its center.
+                        // Its extent along its local Z is piece.geometry.parameters.depth / 2
+                        // We need to transform this local extent to world Z.
+                        
+                        const tempPiece = piece.clone(); // Temporary clone to avoid modifying original during check
+                        tempPiece.position.copy(initialPos).add(finalMovement);
+                        tempPiece.updateMatrixWorld(); // Ensure matrix is up-to-date for bounding box calculation
 
-                        const lowestZAfterMove = checkBox.min.z + finalMovement.z;
+                        const pieceBox = new THREE.Box3().setFromObject(tempPiece);
+                        const lowestZAfterMove = pieceBox.min.z;
                         
                         if (lowestZAfterMove < 0) {
                             minRequiredZCorrection = Math.max(minRequiredZCorrection, -lowestZAfterMove);
@@ -1050,23 +1036,15 @@
 
                     if (minRequiredZCorrection > 0) {
                         finalMovement.z += minRequiredZCorrection;
-                        currentLowestProjectedZ += minRequiredZCorrection; // Update after correction
+                        currentLowestProjectedZ += minRequiredZCorrection; 
                     }
 
-                    // Snap to floor if very close
-                    const snapToFloorThreshold = 0.01; // 10mm
+                    const snapToFloorThreshold = 0.01; 
                     if (Math.abs(currentLowestProjectedZ) < snapToFloorThreshold && currentLowestProjectedZ !== 0) {
-                        finalMovement.z -= currentLowestProjectedZ; // Adjust to make lowest Z exactly 0
+                        finalMovement.z -= currentLowestProjectedZ; 
                     }
                 }
-                // --- End Floor Collision and Snap ---
                 
-                // (Future: Integrate general snapping here, it might adjust finalMovement)
-                // const snapInfo = checkSnapForMovement(finalMovement);
-                // if (snapInfo.snapDelta) {
-                //    finalMovement.add(snapInfo.snapDelta);
-                // }
-
                 app.selectedPieces.forEach(piece => {
                     const initialPos = app.initialPiecePositions.get(piece);
                     if (initialPos) {
@@ -1074,12 +1052,9 @@
                     }
                 });
 
-                // Show measurement (e.g., distance moved, or distance to snap target)
-                // For now, let's show the magnitude of movement along the axis
                 const movedDistance = Math.abs(finalMovement[app.movementAxis]);
-                if (movedDistance > 0.001) { // If there's noticeable movement
-                    showMeasurement(movedDistance * 1000); // Show in mm
-                    // Position measurement near the center of the selection
+                if (movedDistance > 0.001) { 
+                    showMeasurement(movedDistance * 1000); 
                     const selectionCenter = new THREE.Vector3();
                     app.selectedPieces.forEach(p => selectionCenter.add(p.position));
                     selectionCenter.divideScalar(app.selectedPieces.size);
@@ -1089,16 +1064,11 @@
         }
         
         function checkSnapForMovement(movement) {
-            // This function is complex and needs careful implementation for general snapping.
-            // For now, it's a placeholder. Floor snapping is handled in moveSelectedAlongAxis.
-            const snapThreshold = 0.01; // 10mm
+            const snapThreshold = 0.01; 
             let minDistance = Infinity;
             let snapDelta = null;
             let measurementPos = null;
             
-            // Example: Snap to grid (not implemented here)
-            // Example: Snap to other pieces (partially in old code, needs review)
-
             return {
                 snapDelta,
                 distance: minDistance === Infinity ? null : minDistance,
@@ -1115,7 +1085,7 @@
             });
             center.divideScalar(app.selectedPieces.size);
             
-            const rotation = Math.PI / 2; // 90 degrees
+            const rotation = Math.PI / 2; 
             const axisVector = new THREE.Vector3();
             if (axis === 'x') axisVector.set(1, 0, 0);
             else if (axis === 'y') axisVector.set(0, 1, 0);
@@ -1123,16 +1093,13 @@
             else return;
 
             app.selectedPieces.forEach(piece => {
-                // Rotate piece around its own center
-                piece.rotateOnWorldAxis(axisVector, rotation); // Simpler for world axis rotation
+                piece.rotateOnWorldAxis(axisVector, rotation); 
 
-                // If multiple pieces, rotate position around group center
                 if (app.selectedPieces.size > 1) {
                     const offset = piece.position.clone().sub(center);
                     offset.applyAxisAngle(axisVector, rotation);
                     piece.position.copy(center).add(offset);
                 }
-                 // Ensure piece is not below floor after rotation
                 const pieceBox = new THREE.Box3().setFromObject(piece);
                 if (pieceBox.min.z < 0) {
                     piece.position.z += -pieceBox.min.z;
@@ -1145,14 +1112,13 @@
         }
         
         function getBoxCorners(box) {
-            // (Existing function - can be kept if used by full snapping logic)
-            return [ /* ... corners ... */ ];
+            return [ /* ... corners ... */ ]; // Placeholder, not currently used by core logic
         }
         
         function updateSnapLines() {
             clearSnapLines();
             if (!app.movementAxis || app.selectedPieces.size === 0) return;
-            // (Existing function - can be kept or enhanced)
+            // Placeholder for snap line visualization
         }
         
         function clearSnapLines() {
@@ -1164,33 +1130,29 @@
             if (!app.lengthEditPiece || !app.isLengthEditing) return;
 
             const piece = app.lengthEditPiece;
-            // Original state was stored in onMouseDown when editing started
             const originalLengthMM = app.lengthEditOriginalLength;
-            const originalPosition = app.lengthEditOriginalPosition; // World position
+            const originalPosition = app.lengthEditOriginalPosition; 
             const originalQuaternion = app.lengthEditOriginalQuaternion;
 
-            // Use mouse delta from the start of length editing for more intuitive control
-            const mouseDeltaMM = (event.clientX - app.lastMouseX) * 10; // Sensitivity for length change in mm
+            const mouseDeltaMM = (event.clientX - app.lastMouseX) * 10; 
 
             let lengthChangeDueToMouseMM;
-            if (app.lengthEditFace === 'top') { // 'top' is +localZ end
+            if (app.lengthEditFace === 'top') { 
                 lengthChangeDueToMouseMM = mouseDeltaMM;
-            } else { // 'bottom' is -localZ end
+            } else { 
                 lengthChangeDueToMouseMM = -mouseDeltaMM; 
             }
             
             let newLengthMM = originalLengthMM + lengthChangeDueToMouseMM;
-            newLengthMM = Math.max(10, newLengthMM); // Min length 10mm
+            newLengthMM = Math.max(10, newLengthMM); 
             const snappedNewLengthMM = Math.round(newLengthMM / 10) * 10;
 
             const actualTotalLengthChangeMM = snappedNewLengthMM - originalLengthMM;
 
-            // Update geometry: BoxGeometry is (X, Y, Z) -> (thickness, width, length)
             const t_meters = piece.userData.thickness / 1000;
             const w_meters = piece.userData.width / 1000;
             const l_new_meters = snappedNewLengthMM / 1000;
 
-            // Avoid unnecessary geometry recreation if length hasn't effectively changed
             if (Math.abs(snappedNewLengthMM - piece.userData.length) < 0.1 && piece.geometry.parameters.depth === l_new_meters) {
                  showMeasurement(`Length: ${piece.userData.length}mm`);
                  const currentEditedFaceCenterLocal = new THREE.Vector3(0,0, (app.lengthEditFace === 'top' ? 1 : -1) * piece.geometry.parameters.depth/2 );
@@ -1202,36 +1164,27 @@
             piece.geometry = new THREE.BoxGeometry(t_meters, w_meters, l_new_meters);
             piece.userData.length = snappedNewLengthMM;
 
-            // Adjust piece's world position to keep the non-edited end fixed.
-            // The piece's origin is its center. When length changes, both ends shift relative to the old center.
-            // We need to shift the piece by half of the *total* length change, along its local Z-axis.
-            const shiftDistanceMeters = (actualTotalLengthChangeMM / 2000.0); // Half the total change, in meters
+            const shiftDistanceMeters = (actualTotalLengthChangeMM / 2000.0); 
 
-            // Determine the direction of shift in local Z.
-            // If 'top' face (+localZ) was clicked/edited, it moved. The bottom (-localZ) was fixed.
-            // If length increased (actualTotalLengthChangeMM > 0), center moved in +localZ by shiftDistanceMeters.
-            // To keep bottom fixed, the entire piece must also move in +localZ by shiftDistanceMeters.
             let localShiftAxis = new THREE.Vector3(0, 0, 0);
             if (app.lengthEditFace === 'top') {
-                localShiftAxis.set(0, 0, 1); // Shift in positive local Z
-            } else { // 'bottom' face (-localZ) was edited, top fixed.
-                localShiftAxis.set(0, 0, -1); // Shift in negative local Z
+                localShiftAxis.set(0, 0, 1); 
+            } else { 
+                localShiftAxis.set(0, 0, -1); 
             }
             
             const worldShiftVector = localShiftAxis.clone()
                 .multiplyScalar(shiftDistanceMeters)
-                .applyQuaternion(originalQuaternion); // Apply original orientation to the shift vector
+                .applyQuaternion(originalQuaternion); 
             
-            // Set position based on original position + calculated shift
             piece.position.copy(originalPosition).add(worldShiftVector);
             
-            // Ensure piece is not below floor after length adjustment and repositioning
             const pieceBox = new THREE.Box3().setFromObject(piece);
             if (pieceBox.min.z < 0) {
                 piece.position.z += -pieceBox.min.z;
             }
 
-            piece.material.color.setHex(0x8B6F47); // Reset color
+            piece.material.color.setHex(0x8B6F47); 
 
             showMeasurement(`Length: ${snappedNewLengthMM}mm`);
             const editedFaceCenterLocal = new THREE.Vector3(0,0, (app.lengthEditFace === 'top' ? 1 : -1) * l_new_meters/2 );
@@ -1239,12 +1192,11 @@
         }
 
         function duplicatePiece(original) {
-            const clone = original.clone(); // This clones geometry and material by reference initially
-            clone.material = original.material.clone(); // Deep clone material
-            clone.userData = { ...original.userData }; // Copy user data
+            const clone = original.clone(); 
+            clone.material = original.material.clone(); 
+            clone.userData = { ...original.userData }; 
             
-            clone.position.add(new THREE.Vector3(0.1, 0.1, 0.1)); // Offset slightly
-             // Ensure duplicated piece is not below floor
+            clone.position.add(new THREE.Vector3(0.1, 0.1, 0.1)); 
             const pieceBox = new THREE.Box3().setFromObject(clone);
             if (pieceBox.min.z < 0) {
                 clone.position.z += -pieceBox.min.z;
@@ -1268,7 +1220,6 @@
             
             app.selectedPieces.forEach(piece => {
                 app.scene.remove(piece);
-                // Make sure to dispose geometry and material if they are unique to this piece
                 if (piece.geometry) piece.geometry.dispose();
                 if (piece.material) piece.material.dispose();
             });
@@ -1287,7 +1238,7 @@
         
         function updatePieceSelection(piece, selected) {
             if (selected) {
-                piece.material.emissive = new THREE.Color(0xcc3333); // Brighter red for selection
+                piece.material.emissive = new THREE.Color(0xcc3333); 
                 piece.material.emissiveIntensity = 0.3;
             } else {
                 piece.material.emissive = new THREE.Color(0x000000);
@@ -1320,7 +1271,7 @@
             
             app.measurementElement.style.left = `${x}px`;
             app.measurementElement.style.top = `${y}px`;
-            app.measurementElement.style.transform = 'translate(-50%, -150%)'; // Position above the point
+            app.measurementElement.style.transform = 'translate(-50%, -150%)'; 
         }
         
         function updateHotkeyGuide() {
@@ -1331,7 +1282,6 @@
             selectedGuide.style.display = !app.movementAxis && app.selectedPieces.size > 0 ? 'block' : 'none';
         }
         
-        // Project management (using localStorage, simple alert/prompt)
         function loadProjects() {
             const saved = localStorage.getItem('woodProjects');
             if (saved) {
@@ -1356,7 +1306,7 @@
                         width: obj.userData.width,
                         length: obj.userData.length,
                         position: obj.position.toArray(),
-                        rotation: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w] // Save quaternion
+                        rotation: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w] 
                     });
                 }
             });
@@ -1383,7 +1333,7 @@
                     const w = data.width / 1000;
                     const l = data.length / 1000;
                     const geometry = new THREE.BoxGeometry(t, w, l);
-                    geometry.computeBoundingBox(); // Important for accurate Box3 later
+                    if (geometry.boundingBox === null) geometry.computeBoundingBox();
                     const material = new THREE.MeshStandardMaterial({
                         color: 0x8B6F47, roughness: 0.7, metalness: 0.1
                     });
@@ -1394,16 +1344,16 @@
                         thickness: data.thickness, width: data.width, length: data.length, isWoodPiece: true
                     };
                     piece.position.fromArray(data.position);
-                    piece.quaternion.fromArray(data.rotation); // Load quaternion
+                    piece.quaternion.fromArray(data.rotation); 
                     app.scene.add(piece);
                 });
             }
             app.currentProject = name;
             updateProjectList();
             showStatus(`Loaded ${name}`);
-            app.undoStack = []; // Clear undo/redo for new project
+            app.undoStack = []; 
             app.redoStack = [];
-            saveState(); // Save initial state of loaded project for undo
+            saveState(); 
         }
         
         function updateProjectList() {
@@ -1426,18 +1376,17 @@
             });
         }
         
-        app.createNewProject = function() { // Expose to window via app object
+        app.createNewProject = function() { 
             const name = prompt('Project name:', `Project ${Object.keys(app.projects).length + 1}`);
             if (name && !app.projects[name]) {
                 app.projects[name] = { pieces: [] };
-                // saveCurrentProject(); // No need, loadProject will save its (empty) state
-                loadProject(name); // This will clear scene and save the new empty project
+                loadProject(name); 
             } else if (name && app.projects[name]) {
                 alert("A project with this name already exists.");
             }
         }
         
-        app.renameProject = function() { // Expose to window
+        app.renameProject = function() { 
             if (!app.currentProject) return;
             const newName = prompt('New name:', app.currentProject);
             if (newName && newName !== app.currentProject && !app.projects[newName]) {
@@ -1460,7 +1409,7 @@
                 delete app.projects[name];
                 if (name === app.currentProject) {
                     const remaining = Object.keys(app.projects);
-                    loadProject(remaining[0]); // Load the first remaining project
+                    loadProject(remaining[0]); 
                 }
                 localStorage.setItem('woodProjects', JSON.stringify(app.projects));
                 updateProjectList();
@@ -1468,7 +1417,6 @@
             }
         }
         
-        // Undo/Redo
         function saveState() {
             const state = [];
             app.scene.traverse((obj) => {
@@ -1486,13 +1434,13 @@
         }
         
         function undo() {
-            if (app.undoStack.length <= 1) { // Keep at least one state (initial) or disallow undo if only 1 state
+            if (app.undoStack.length <= 1) { 
                  showStatus('Nothing to undo'); return;
             }
-            const currentStateJson = JSON.stringify(app.undoStack.pop()); // Current state is removed
-            app.redoStack.push(JSON.parse(currentStateJson)); // Add it to redo
+            const currentStateJson = JSON.stringify(app.undoStack.pop()); 
+            app.redoStack.push(JSON.parse(currentStateJson)); 
 
-            const previousState = JSON.parse(JSON.stringify(app.undoStack[app.undoStack.length - 1])); // Peek
+            const previousState = JSON.parse(JSON.stringify(app.undoStack[app.undoStack.length - 1])); 
             restoreState(previousState);
             showStatus('Undo');
         }
@@ -1500,8 +1448,8 @@
         function redo() {
             if (app.redoStack.length === 0) { showStatus('Nothing to redo'); return; }
             const nextState = app.redoStack.pop();
-            app.undoStack.push(nextState); // Add it back to undo stack
-            restoreState(JSON.parse(JSON.stringify(nextState))); // Restore a copy
+            app.undoStack.push(nextState); 
+            restoreState(JSON.parse(JSON.stringify(nextState))); 
             showStatus('Redo');
         }
         
@@ -1518,7 +1466,7 @@
             state.forEach(data => {
                 const t = data.thickness / 1000; const w = data.width / 1000; const l = data.length / 1000;
                 const geometry = new THREE.BoxGeometry(t, w, l);
-                geometry.computeBoundingBox();
+                if (geometry.boundingBox === null) geometry.computeBoundingBox();
                 const material = new THREE.MeshStandardMaterial({ color: 0x8B6F47, roughness: 0.7, metalness: 0.1 });
                 const piece = new THREE.Mesh(geometry, material);
                 piece.castShadow = true; piece.receiveShadow = true;
@@ -1527,18 +1475,17 @@
                 piece.quaternion.fromArray(data.rotation);
                 app.scene.add(piece);
             });
-            saveCurrentProject(); // Save this restored state to localStorage for the current project
+            saveCurrentProject(); 
             updateHotkeyGuide();
         }
         
-        // Animation loop
         function animate() {
             requestAnimationFrame(animate);
             app.renderer.render(app.scene, app.camera);
         }
         
         window.addEventListener('load', init);
-        window.app = app; // Expose main app object for UI calls from HTML
+        window.app = app; 
     </script>
 </body>
 </html>
