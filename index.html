@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Wood Construction</title>
+    <title>3D Wood Construction (Refactored)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -109,36 +110,102 @@
             color: #fff;
             text-transform: uppercase;
             letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+         .panel-section h3 .add-project-btn {
+            background: none;
+            border: none;
+            color: #4fc3f7;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+        .panel-section h3 .add-project-btn:hover {
+            color: #fff;
         }
         
         /* Material Selection */
         .thickness-group {
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+            background: rgba(50, 50, 50, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
         }
         
-        .thickness-group h4 {
+        .thickness-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: rgba(60, 60, 60, 0.6);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .thickness-header:hover {
+            background: rgba(70, 70, 70, 0.6);
+        }
+        
+        .thickness-header h4 {
             font-size: 12px;
-            color: #999;
-            margin-bottom: 10px;
+            color: #fff;
+            margin: 0;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         
-        .wood-option {
+        .collapse-icon {
+            width: 20px;
+            height: 20px;
             display: flex;
             align-items: center;
-            padding: 10px;
-            margin: 6px 0;
+            justify-content: center;
+            transition: transform 0.3s;
+        }
+        
+        .collapse-icon::before {
+            content: '▼';
+            color: #999;
+            font-size: 10px;
+        }
+        
+        .thickness-group.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+        
+        .width-options {
+            display: flex;
+            gap: 6px;
+            padding: 8px;
+            max-height: 200px; 
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+        
+        .thickness-group.collapsed .width-options {
+            max-height: 0;
+            padding: 0 8px;
+        }
+        
+        .wood-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 6px 4px;
             background: rgba(60, 60, 60, 0.6);
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
             transition: all 0.2s;
             border: 2px solid transparent;
+            flex: 1;
+            min-width: 0;
         }
         
         .wood-option:hover {
             background: rgba(80, 80, 80, 0.6);
-            transform: translateX(4px);
+            transform: translateY(-2px);
         }
         
         .wood-option.active {
@@ -146,19 +213,22 @@
             border-color: #2196f3;
         }
         
-        .wood-icon {
-            width: 40px;
-            height: 40px;
-            margin-right: 12px;
+        .wood-icon { 
+            width: 100%;
+            max-width: 60px;
+            height: 20px;
+            margin-bottom: 4px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            background: #2a2a2a;
+            border-radius: 3px;
+            background: #2a2a2a; 
         }
         
         .wood-label {
-            font-size: 13px;
+            font-size: 9px;
             font-weight: 500;
             color: #fff;
+            text-align: center;
+            line-height: 1.2;
         }
         
         /* Project Management */
@@ -173,17 +243,22 @@
             margin: 4px 0;
             background: rgba(60, 60, 60, 0.6);
             border-radius: 6px;
-            cursor: pointer;
+            cursor: default; 
             font-size: 12px;
             display: flex;
+            flex-wrap: wrap; 
             justify-content: space-between;
             align-items: center;
             color: #fff;
-            transition: all 0.2s;
+            transition: background-color 0.2s;
+            position: relative;
         }
         
         .project-item:hover {
-            background: rgba(80, 80, 80, 0.6);
+            background: rgba(75, 75, 75, 0.7);
+        }
+        .project-item:hover .project-actions {
+            opacity: 1;
         }
         
         .project-item.active {
@@ -191,37 +266,168 @@
             font-weight: 500;
             border: 1px solid #2196f3;
         }
-        
-        .project-item button {
-            padding: 2px 6px;
-            font-size: 10px;
-            background: #d32f2f;
-            color: white;
+
+        .project-name {
+            flex-grow: 1; 
+            cursor: pointer; 
+            padding: 2px 4px;
+            margin-right: 5px;
+        }
+
+        .project-actions {
+            display: flex;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+         .project-actions button {
+            background: none;
             border: none;
-            border-radius: 4px;
+            color: #bbb;
             cursor: pointer;
-            transition: background 0.2s;
+            padding: 3px 5px;
+            font-size: 11px;
+            margin-left: 3px;
+            border-radius: 3px;
+        }
+        .project-actions button:hover {
+            color: #fff;
+            background-color: rgba(255,255,255,0.1);
         }
         
-        .project-item button:hover {
-            background: #b71c1c;
-        }
-        
-        .project-controls button {
+        .project-delete-confirm {
+            display: none; 
             width: 100%;
+            background-color: rgba(80, 80, 80, 0.85);
             padding: 8px;
-            margin: 4px 0;
-            background: #2196f3;
-            color: white;
+            margin-top: 6px;
+            border-radius: 4px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .project-delete-confirm.visible {
+            display: block;
+        }
+        .project-delete-confirm span {
+            font-size: 11px;
+            margin-right: 10px;
+            color: #eee;
+        }
+        .project-delete-confirm button {
+            background: none;
             border: none;
-            border-radius: 6px;
+            color: white;
+            font-size: 14px; 
             cursor: pointer;
+            padding: 3px 6px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .project-delete-confirm .confirm-yes { color: #4CAF50; }
+        .project-delete-confirm .confirm-yes:hover { background-color: rgba(76, 175, 80, 0.2); }
+        .project-delete-confirm .confirm-no { color: #f44336; }
+        .project-delete-confirm .confirm-no:hover { background-color: rgba(244, 67, 54, 0.2); }
+
+        .project-edit-form, .new-project-input-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+        }
+        .project-edit-form input[type="text"],
+        .new-project-input-item input[type="text"] {
+            flex-grow: 1;
+            background: rgba(20,20,20,0.9);
+            border: 1px solid #555;
+            color: white;
+            padding: 6px 8px;
+            border-radius: 4px;
             font-size: 12px;
-            transition: background 0.2s;
+            margin-right: 5px;
+        }
+        .project-edit-form input[type="text"]:focus,
+        .new-project-input-item input[type="text"]:focus {
+            border-color: #2196f3;
+            outline: none;
+        }
+        .project-edit-form button,
+        .new-project-input-item button {
+            background: none;
+            border: 1px solid #555;
+            color: #ccc;
+            font-size: 13px;
+            cursor: pointer;
+            padding: 5px 7px;
+            border-radius: 4px;
+            margin-left: 3px;
+            transition: all 0.2s;
+        }
+        .project-edit-form button:hover,
+        .new-project-input-item button:hover {
+            background-color: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .project-edit-form .confirm-edit-project,
+        .new-project-input-item .confirm-new-project {
+            border-color: #4CAF50; color: #4CAF50;
+        }
+        .project-edit-form .confirm-edit-project:hover,
+        .new-project-input-item .confirm-new-project:hover {
+            background-color: rgba(76, 175, 80, 0.2); color: #66bb6a;
+        }
+        .project-edit-form .cancel-edit-project,
+        .new-project-input-item .cancel-new-project {
+            border-color: #f44336; color: #f44336;
+        }
+        .project-edit-form .cancel-edit-project:hover,
+        .new-project-input-item .cancel-new-project:hover {
+            background-color: rgba(244, 67, 54, 0.2); color: #ef5350;
         }
         
-        .project-controls button:hover {
-            background: #1976d2;
+        /* Grid toggle in settings */
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: rgba(60, 60, 60, 0.6);
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .settings-label {
+            color: #fff;
+            font-size: 12px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .toggle-switch.active {
+            background: #2196f3;
+        }
+        
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+        
+        .toggle-switch.active::after {
+            transform: translateX(20px);
         }
         
         /* Overlay for closing menu */
@@ -231,15 +437,161 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: transparent;
+            background: transparent; 
             z-index: 999;
             display: none;
         }
         
-        .menu-overlay.active {
-            display: block;
+        /* Settings Panel */
+        .settings-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background: rgba(60, 60, 60, 0.5);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
         
+        .settings-header:hover {
+            background: rgba(70, 70, 70, 0.6);
+        }
+        
+        .settings-header h3 {
+            font-size: 14px;
+            margin: 0;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .settings-expand-icon {
+            transition: transform 0.3s;
+            color: #ccc;
+        }
+        
+        .settings-expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+        
+        .settings-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            margin-bottom: 15px;
+        }
+        
+        .settings-content.expanded {
+            max-height: 200px;
+        }
+        
+        .settings-content .settings-item {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .settings-content .settings-item:last-child {
+            border-bottom: none;
+        }
+        
+        /* Info Panel */
+        .info-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(40, 40, 40, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 12px;
+            min-width: 250px;
+            transition: opacity 0.3s;
+            z-index: 100; 
+        }
+        
+        .info-panel.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .info-panel h4 {
+            font-size: 13px;
+            margin-bottom: 10px;
+            color: #4fc3f7;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            color: #ccc;
+        }
+        
+        .info-label {
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: #4fc3f7;
+            font-weight: 600;
+        }
+
+        .collision-warning {
+            background: rgba(255, 87, 34, 0.2);
+            border: 1px solid #ff5722;
+            color: #ff5722;
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 11px;
+        }
+
+        /* Project Details */
+        .project-details {
+            background: rgba(50,50,50,0.6);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        .project-details h4 {
+            font-size: 12px;
+            color: #4fc3f7;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            font-size: 11px;
+            color: #ccc;
+        }
+        .detail-label { color: #fff; }
+        .detail-value { color: #4fc3f7; font-weight: 600; }
+
+        .materials-breakdown {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .material-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            font-size: 10px;
+            color: #999;
+        }
+
         /* Hotkey Guide */
         .hotkey-guide {
             position: fixed;
@@ -253,6 +605,7 @@
             font-size: 11px;
             transition: opacity 0.3s;
             max-width: 300px;
+            z-index: 100;
         }
         
         .hotkey-guide.hidden {
@@ -287,7 +640,7 @@
             min-width: 20px;
             text-align: center;
             color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255,255,255,0.2);
         }
         
         /* Measurement Display */
@@ -301,14 +654,29 @@
             font-weight: 600;
             pointer-events: none;
             transition: opacity 0.2s;
-            z-index: 100;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 1000; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
         
         .measurement.hidden {
             opacity: 0;
         }
         
+        .measurement.typing {
+            background: rgba(76, 175, 80, 0.9); 
+        }
+        
+        .measurement-input { 
+            background: transparent;
+            border: none;
+            color: white;
+            font-weight: 600;
+            font-size: 13px;
+            outline: none;
+            width: 80px;
+            text-align: center;
+        }
+
         /* Loading */
         .loading {
             position: fixed;
@@ -318,7 +686,7 @@
             font-size: 18px;
             color: #999;
         }
-        
+
         /* Status indicator */
         .status-indicator {
             position: fixed;
@@ -332,11 +700,28 @@
             font-size: 12px;
             font-weight: 600;
             pointer-events: none;
-            transition: opacity 0.3s;
-            z-index: 100;
+            transition: opacity 0.3s, background-color 0.3s;
+            z-index: 1002; 
+        }
+        .status-indicator.hidden {
+            opacity: 0;
         }
         
-        .status-indicator.hidden {
+        /* Snap indicator */
+        .snap-indicator {
+            position: fixed;
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 1001;
+        }
+        
+        .snap-indicator.hidden {
             opacity: 0;
         }
     </style>
@@ -355,34 +740,87 @@
     
     <div class="side-panel" id="sidePanel">
         <div class="panel-section">
-            <h3>Projects</h3>
-            <div class="project-list" id="projectList"></div>
-            <div class="project-controls">
-                <button onclick="app.createNewProject()">New Project</button>
-                <button onclick="app.renameProject()">Rename</button>
+            <div class="settings-header" onclick="toggleSettingsSection()">
+                <h3>
+                    <i class="fas fa-cog" style="margin-right: 10px;"></i>
+                    <span>Settings</span>
+                    <span class="settings-expand-icon" id="settingsExpandIcon"><i class="fas fa-chevron-down"></i></span>
+                </h3>
             </div>
+            <div class="settings-content" id="settingsContent"> <div class="settings-item">
+                    <span class="settings-label">Grid Snap (G)</span>
+                    <div class="toggle-switch" id="gridToggle" onclick="app.toggleGridSnap()">
+                        </div>
+                </div>
+                </div>
         </div>
+        <div class="panel-section">
+            <h3>
+                <span>Projects</span>
+                <button class="add-project-btn" onclick="app.gui.promptNewProject()" title="New Project">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </h3>
+            <div class="project-list" id="projectList"></div>
+            </div>
         
         <div class="panel-section">
             <h3>Wood Materials</h3>
             <div id="materialList"></div>
         </div>
+        
+        <div class="panel-section">
+            <h3>Project Details</h3>
+            <div class="project-details" id="projectDetailsContent">
+                 <div class="detail-row">
+                    <span class="detail-label">Total Cost:</span>
+                    <span class="detail-value" id="totalCost">0 kr</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Total Weight:</span>
+                    <span class="detail-value" id="totalWeight">0 kg</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Total Pieces:</span>
+                    <span class="detail-value" id="totalPieces">0</span>
+                </div>
+                <div class="materials-breakdown">
+                    <h4>Materials Used</h4>
+                    <div id="materialsBreakdown"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="info-panel hidden" id="infoPanel">
+        <h4>Selection Info</h4>
+        <div id="infoContent"></div>
     </div>
     
     <div class="hotkey-guide" id="hotkeyGuide">
         <div class="hotkey-group" id="movementGuide" style="display: none;">
             <h4>Movement Mode Active</h4>
             <div class="hotkey"><span class="hotkey-key">Click + Drag</span> Move along axis</div>
+            <div class="hotkey"><span class="hotkey-key">Type Number</span> Exact distance</div>
+            <div class="hotkey"><span class="hotkey-key">↑/↓</span> Move ±10mm</div>
+            <div class="hotkey"><span class="hotkey-key">Enter</span> Confirm typed value</div>
             <div class="hotkey"><span class="hotkey-key">Release Key</span> Exit mode</div>
+        </div>
+        <div class="hotkey-group" id="lengthEditGuide" style="display: none;">
+            <h4>Length Edit Mode</h4>
+            <div class="hotkey"><span class="hotkey-key">Drag</span> Adjust length</div>
+            <div class="hotkey"><span class="hotkey-key">Type Number</span> Exact length</div>
+            <div class="hotkey"><span class="hotkey-key">↑/↓</span> Adjust ±10mm</div>
+            <div class="hotkey"><span class="hotkey-key">Enter</span> Confirm typed value</div>
         </div>
         <div class="hotkey-group" id="selectedGuide" style="display: none;">
             <h4>Selected Pieces</h4>
-            <div class="hotkey"><span class="hotkey-key">Z</span> Hold + drag for Z movement</div>
-            <div class="hotkey"><span class="hotkey-key">X</span> Hold + drag for X movement</div>
-            <div class="hotkey"><span class="hotkey-key">C</span> Hold + drag for Y movement</div>
-            <div class="hotkey"><span class="hotkey-key">A</span> Rotate around Z</div>
-            <div class="hotkey"><span class="hotkey-key">S</span> Rotate around X</div>
-            <div class="hotkey"><span class="hotkey-key">D</span> Rotate around Y</div>
+            <div class="hotkey"><span class="hotkey-key">Z</span> Hold + ↑/↓ for Z movement</div>
+            <div class="hotkey"><span class="hotkey-key">X</span> Hold + ↑/↓ for X movement</div>
+            <div class="hotkey"><span class="hotkey-key">C</span> Hold + ↑/↓ for Y movement</div>
+            <div class="hotkey"><span class="hotkey-key">A</span> Rotate around Local Z</div>
+            <div class="hotkey"><span class="hotkey-key">S</span> Rotate around Local X</div>
+            <div class="hotkey"><span class="hotkey-key">D</span> Rotate around Local Y</div>
             <div class="hotkey"><span class="hotkey-key">E</span> + Click to duplicate</div>
             <div class="hotkey"><span class="hotkey-key">T</span> Delete selected</div>
             <div class="hotkey"><span class="hotkey-key">V</span> + Click end to adjust length</div>
@@ -393,18 +831,27 @@
             <div class="hotkey"><span class="hotkey-key">Ctrl + Click</span> Multi-select</div>
             <div class="hotkey"><span class="hotkey-key">Left Drag</span> Pan camera</div>
             <div class="hotkey"><span class="hotkey-key">Right Drag</span> Orbit camera</div>
+            <div class="hotkey"><span class="hotkey-key">Wheel</span> Zoom camera</div>
+            <div class="hotkey"><span class="hotkey-key">+ / -</span> Zoom in/out</div>
             <div class="hotkey"><span class="hotkey-key">Ctrl+Z</span> Undo</div>
             <div class="hotkey"><span class="hotkey-key">Ctrl+Y</span> Redo</div>
+            <div class="hotkey"><span class="hotkey-key">G</span> Toggle grid snap</div>
             <div class="hotkey"><span class="hotkey-key">1-0</span> Quick material select</div>
         </div>
     </div>
     
     <div class="measurement hidden" id="measurement"></div>
-    
+    <div class="snap-indicator hidden" id="snapIndicator"></div>
     <div class="status-indicator hidden" id="statusIndicator"></div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
+        // Constants for collision and snapping
+        const COLLISION_TOLERANCE = 0.002; // 2mm - unified collision tolerance
+        const SNAP_TOLERANCE = 0.010; // 10mm - unified snap tolerance  
+        const GEOMETRY_PADDING = 0.003; // 3mm - padding for rounded geometry
+        const MIN_PIECE_LENGTH = 0.010; // 10mm minimum length
+
         // Global app object
         const app = {
             scene: null,
@@ -415,40 +862,63 @@
             
             // State
             selectedPieces: new Set(),
-            movementAxis: null,
-            isDraggingPiece: false,
-            dragStartPos: null, // World space intersection point where drag started
-            initialPiecePositions: new Map(), // Stores original positions of pieces being dragged
-
-            isLengthEditing: false,
-            lengthEditPiece: null,
-            lengthEditFace: null, // 'top' or 'bottom' for Z-axis ends, or could be extended
-            lengthEditOriginalLength: 0,
-            lengthEditOriginalPosition: null,
-            lengthEditOriginalQuaternion: null,
+            
+            // Movement state - unified system
+            movementState: {
+                active: false,
+                mode: null, // 'drag', 'typed', 'step'
+                axis: null, // 'x', 'y', 'z', 'free'
+                startPositions: new Map(),
+                currentOffset: new THREE.Vector3(),
+                constraints: new Set(),
+                typedValue: '',
+                isDragging: false,
+                lengthEditData: null,
+                // Reference plane data for stable free movement
+                referencePlane: null,
+                referenceCenter: null,
+                initialIntersection: null
+            },
+            
+            // Visual helpers
+            selectionOutlines: new Map(), 
+            resizeIndicators: new Map(), 
             
             // Input state
             keys: {},
-            mouseDown: false,
-            rightMouseDown: false,
+            mouseDown: false, 
+            rightMouseDown: false, 
             lastMouseX: 0,
             lastMouseY: 0,
             
+            // Grid snap
+            gridSize: 10, 
+            gridSnapEnabled: true,
+            
+            // UI State
+            collapsedThicknesses: new Set(),
+            isAddingProject: false, 
+            editingProjectName: null, 
+            
+            // Activity tracking for auto-hide
+            lastActivity: Date.now(),
+            activityTimeout: null,
+            
             // Camera state
             cameraDistance: 3,
-            cameraTheta: Math.PI / 4, // Azimuthal angle (around Z-axis)
-            cameraPhi: Math.PI / 3,   // Polar angle (from positive Z-axis)
+            cameraTheta: Math.PI / 4,
+            cameraPhi: Math.PI / 3,
             cameraTarget: new THREE.Vector3(0, 0, 0),
             
-            // Wood dimensions (thickness x width in mm)
+            // Wood dimensions and properties
             woodDimensions: [
                 { thickness: 20, widths: [48, 73, 98, 120] },
                 { thickness: 28, widths: [48, 73, 98, 120] },
                 { thickness: 36, widths: [48, 73, 98, 120] },
-                { thickness: 48, widths: [48, 73, 98, 120] },
+                { thickness: 48, widths: [48, 73, 98, 120, 148, 198] },
                 { thickness: 98, widths: [48, 73, 98, 120] }
             ],
-            
+            woodDensity: 0.559, 
             selectedDimension: null,
             recentDimensions: [],
             
@@ -461,252 +931,1047 @@
             redoStack: [],
             
             // Visual helpers
-            snapLines: [],
+            guideLines: [],
             measurementTimeout: null,
             measurementElement: null,
-            statusTimeout: null
+            statusTimeout: null,
+            
+            gui: {} 
+        };
+
+        // --- UNIFIED MOVEMENT SYSTEM ---
+        
+        class MovementConstraint {
+            constructor(name) {
+                this.name = name;
+            }
+            
+            apply(pieces, movement, startPositions) {
+                // Override in subclasses
+                return movement;
+            }
+        }
+        
+        class FloorConstraint extends MovementConstraint {
+            constructor() {
+                super('floor');
+            }
+            
+            apply(pieces, movement, startPositions) {
+                let constrainedMovement = movement.clone();
+                let minZCorrection = 0;
+                
+                pieces.forEach(piece => {
+                    const startPos = startPositions.get(piece);
+                    if (!startPos) return;
+                    
+                    const newPos = startPos.clone().add(constrainedMovement);
+                    const tempPiece = piece.clone();
+                    tempPiece.position.copy(newPos);
+                    tempPiece.updateMatrixWorld(true);
+                    
+                    const box = new THREE.Box3().setFromObject(tempPiece);
+                    if (box.min.z < 0) {
+                        minZCorrection = Math.max(minZCorrection, -box.min.z);
+                    }
+                });
+                
+                if (minZCorrection > 0) {
+                    constrainedMovement.z += minZCorrection;
+                }
+                
+                return constrainedMovement;
+            }
+        }
+        
+        class CollisionConstraint extends MovementConstraint {
+            constructor() {
+                super('collision');
+            }
+            
+            apply(pieces, movement, startPositions) {
+                // Only check collisions if there's meaningful movement
+                if (movement.lengthSq() < 0.000001) return movement;
+                
+                // Get all pieces that are NOT currently being moved
+                const staticPieces = app.scene.children.filter(
+                    obj => obj.userData.isWoodPiece && !pieces.has(obj)
+                );
+                
+                // Create test boxes for moving pieces at their new positions
+                const testBoxes = [];
+                pieces.forEach(piece => {
+                    const startPos = startPositions.get(piece);
+                    if (!startPos) return;
+                    
+                    const newPos = startPos.clone().add(movement);
+                    const tempPiece = piece.clone();
+                    tempPiece.position.copy(newPos);
+                    tempPiece.updateMatrixWorld(true);
+                    
+                    const box = new THREE.Box3().setFromObject(tempPiece);
+                    // Adjust for geometry padding
+                    box.expandByScalar(-GEOMETRY_PADDING);
+                    testBoxes.push({ box, piece, originalPiece: piece });
+                });
+                
+                // Check for collisions
+                for (let i = 0; i < testBoxes.length; i++) {
+                    const { box: movingBox, piece: movingPiece, originalPiece } = testBoxes[i];
+                    
+                    // Check against static pieces (pieces not being moved)
+                    for (const staticPiece of staticPieces) {
+                        // Explicit check to ensure we're not comparing a piece to itself
+                        if (originalPiece === staticPiece) {
+                            console.warn('Attempted self-collision check in static pieces - this should not happen!');
+                            continue;
+                        }
+                        
+                        const staticBox = new THREE.Box3().setFromObject(staticPiece);
+                        staticBox.expandByScalar(-GEOMETRY_PADDING);
+                        
+                        if (boxesOverlap(movingBox, staticBox, COLLISION_TOLERANCE)) {
+                            return new THREE.Vector3(); // No movement allowed
+                        }
+                    }
+                    
+                    // Check against other moving pieces (but not the same piece)
+                    for (let j = i + 1; j < testBoxes.length; j++) {
+                        const { box: otherMovingBox, piece: otherMovingPiece, originalPiece: otherOriginalPiece } = testBoxes[j];
+                        
+                        // Explicit check to ensure we're not comparing a piece to itself
+                        if (originalPiece === otherOriginalPiece) {
+                            console.warn('Attempted self-collision check in moving pieces - this should not happen!');
+                            continue;
+                        }
+                        
+                        if (boxesOverlap(movingBox, otherMovingBox, COLLISION_TOLERANCE)) {
+                            return new THREE.Vector3(); // No movement allowed
+                        }
+                    }
+                }
+                
+                return movement;
+            }
+        }
+        
+        class SnapConstraint extends MovementConstraint {
+            constructor() {
+                super('snap');
+            }
+            
+            apply(pieces, movement, startPositions) {
+                if (!app.gridSnapEnabled && pieces.size === 0) return movement;
+                
+                let snappedMovement = movement.clone();
+                let snapInfo = null;
+                let bestSnapDistance = SNAP_TOLERANCE;
+                
+                const staticPieces = app.scene.children.filter(
+                    obj => obj.userData.isWoodPiece && !pieces.has(obj)
+                );
+                
+                pieces.forEach(movingPiece => {
+                    const startPos = startPositions.get(movingPiece);
+                    if (!startPos) return;
+                    
+                    const tempPiece = movingPiece.clone();
+                    tempPiece.position.copy(startPos).add(snappedMovement);
+                    tempPiece.updateMatrixWorld(true);
+                    
+                    // Use actual geometry bounds for snap calculation (no padding adjustment)
+                    const movingBox = new THREE.Box3().setFromObject(tempPiece);
+                    
+                    // Floor snap - use actual geometry
+                    if (Math.abs(movingBox.min.z) < bestSnapDistance) {
+                        const snapOffset = -movingBox.min.z;
+                        snappedMovement.z = movement.z + snapOffset;
+                        snapInfo = { type: 'floor', distance: Math.abs(movingBox.min.z * 1000) };
+                        bestSnapDistance = Math.abs(snapOffset);
+                    }
+                    
+                    // Object snapping - use actual geometry bounds for positioning
+                    staticPieces.forEach(staticPiece => {
+                        const staticBox = new THREE.Box3().setFromObject(staticPiece);
+                        
+                        // Test each face for snapping using actual geometry
+                        const tests = [
+                            { face: 'minX', axis: 'x', movingVal: () => movingBox.min.x, staticVal: () => staticBox.max.x },
+                            { face: 'maxX', axis: 'x', movingVal: () => movingBox.max.x, staticVal: () => staticBox.min.x },
+                            { face: 'minY', axis: 'y', movingVal: () => movingBox.min.y, staticVal: () => staticBox.max.y },
+                            { face: 'maxY', axis: 'y', movingVal: () => movingBox.max.y, staticVal: () => staticBox.min.y },
+                            { face: 'minZ', axis: 'z', movingVal: () => movingBox.min.z, staticVal: () => staticBox.max.z },
+                            { face: 'maxZ', axis: 'z', movingVal: () => movingBox.max.z, staticVal: () => staticBox.min.z }
+                        ];
+                        
+                        tests.forEach(test => {
+                            const dist = Math.abs(test.movingVal() - test.staticVal());
+                            
+                            if (dist < bestSnapDistance) {
+                                // Check if faces would overlap on other axes using padded boxes for collision check
+                                const movingBoxPadded = movingBox.clone();
+                                const staticBoxPadded = staticBox.clone();
+                                movingBoxPadded.expandByScalar(-GEOMETRY_PADDING);
+                                staticBoxPadded.expandByScalar(-GEOMETRY_PADDING);
+                                
+                                const otherAxes = ['x', 'y', 'z'].filter(a => a !== test.axis);
+                                let canSnap = true;
+                                
+                                for (const axis of otherAxes) {
+                                    const movingMin = movingBoxPadded.min[axis];
+                                    const movingMax = movingBoxPadded.max[axis];
+                                    const staticMin = staticBoxPadded.min[axis];
+                                    const staticMax = staticBoxPadded.max[axis];
+                                    
+                                    const overlap = Math.min(movingMax, staticMax) - Math.max(movingMin, staticMin);
+                                    if (overlap <= 0) {
+                                        canSnap = false;
+                                        break;
+                                    }
+                                }
+                                
+                                if (canSnap) {
+                                    // Calculate snap offset using actual geometry (no padding) for perfect touch
+                                    const snapOffset = test.staticVal() - test.movingVal();
+                                    snappedMovement[test.axis] = movement[test.axis] + snapOffset;
+                                    snapInfo = { type: 'object', face: test.face, distance: dist * 1000 };
+                                    bestSnapDistance = dist;
+                                }
+                            }
+                        });
+                    });
+                });
+                
+                // Show snap indicator if snapping occurred
+                if (snapInfo) {
+                    showSnapIndicator(snapInfo);
+                }
+                
+                // Apply grid snapping last
+                if (app.gridSnapEnabled) {
+                    snappedMovement = snapVectorToGrid(snappedMovement);
+                }
+                
+                return snappedMovement;
+            }
+        }
+        
+        function boxesOverlap(box1, box2, tolerance = 0) {
+            return (
+                box1.min.x <= box2.max.x + tolerance &&
+                box1.max.x >= box2.min.x - tolerance &&
+                box1.min.y <= box2.max.y + tolerance &&
+                box1.max.y >= box2.min.y - tolerance &&
+                box1.min.z <= box2.max.z + tolerance &&
+                box1.max.z >= box2.min.z - tolerance
+            );
+        }
+        
+        function unifiedMove(pieces, desiredMovement, mode = 'drag') {
+            if (pieces.size === 0) return false;
+            
+            // Use a higher threshold for meaningful movement to avoid false collision warnings
+            // Especially important for small mouse movements during piece selection
+            const movementThreshold = mode === 'drag' ? 0.001 : 0.000001; // 1mm for drag, 0.001mm for typed/step
+            if (desiredMovement.lengthSq() < movementThreshold) return true;
+            
+            // Initialize movement state if needed
+            if (!app.movementState.active || app.movementState.startPositions.size === 0) {
+                app.movementState.startPositions.clear();
+                pieces.forEach(piece => {
+                    app.movementState.startPositions.set(piece, piece.position.clone());
+                });
+            }
+            
+            // Start with desired movement
+            let finalMovement = desiredMovement.clone();
+            
+            // Apply constraints in order
+            const constraints = [
+                new FloorConstraint(),
+                new SnapConstraint(),
+                new CollisionConstraint()
+            ];
+            
+            constraints.forEach(constraint => {
+                finalMovement = constraint.apply(pieces, finalMovement, app.movementState.startPositions);
+            });
+            
+            // Check if movement is valid (not blocked by collision)
+            const isBlocked = finalMovement.lengthSq() < 0.000001 && desiredMovement.lengthSq() > movementThreshold;
+            
+            if (isBlocked) {
+                // Only show collision warning for meaningful movement attempts
+                if (desiredMovement.lengthSq() > 0.01) { // 10mm threshold for showing warnings
+                    showStatus('⚠️ Movement blocked by collision!', true);
+                }
+                return false;
+            }
+            
+            // Apply the movement
+            pieces.forEach(piece => {
+                const startPos = app.movementState.startPositions.get(piece);
+                if (startPos) {
+                    piece.position.copy(startPos).add(finalMovement);
+                }
+            });
+            
+            // Update state
+            app.movementState.currentOffset = finalMovement;
+            
+            // Show measurement
+            if (app.movementState.axis && Math.abs(finalMovement[app.movementState.axis]) > 0.0001) {
+                const distance = Math.round(Math.abs(finalMovement[app.movementState.axis]) * 1000);
+                showMeasurement(`${app.movementState.axis.toUpperCase()}: ${distance}mm`);
+            }
+            
+            updateGuideLines();
+            updateInfoPanel();
+            updateVisualHelpers();
+            
+            return true;
+        }
+        
+        function startMovement(mode, axis = null) {
+            app.movementState.active = true;
+            app.movementState.mode = mode;
+            app.movementState.axis = axis;
+            app.movementState.currentOffset.set(0, 0, 0);
+            app.movementState.typedValue = '';
+            app.movementState.startPositions.clear();
+            
+            app.selectedPieces.forEach(piece => {
+                app.movementState.startPositions.set(piece, piece.position.clone());
+            });
+            
+            // For free movement, establish a stable reference plane at the start
+            if (axis === 'free') {
+                // Calculate the center of selected pieces at movement start
+                const startCenter = new THREE.Vector3();
+                app.movementState.startPositions.forEach(pos => startCenter.add(pos));
+                startCenter.divideScalar(app.movementState.startPositions.size);
+                
+                // Create a stable plane perpendicular to camera at the initial center position
+                const cameraDirection = new THREE.Vector3();
+                app.camera.getWorldDirection(cameraDirection);
+                app.movementState.referencePlane = new THREE.Plane(cameraDirection, -cameraDirection.dot(startCenter));
+                app.movementState.referenceCenter = startCenter.clone();
+                
+                // Store the initial mouse intersection point
+                app.raycaster.setFromCamera(app.mouse, app.camera);
+                const initialIntersection = new THREE.Vector3();
+                app.raycaster.ray.intersectPlane(app.movementState.referencePlane, initialIntersection);
+                app.movementState.initialIntersection = initialIntersection || startCenter.clone();
+            }
+            
+            // Clear any collision warnings when starting movement
+            // This prevents "sticky" collision states
+            app.selectedPieces.forEach(piece => {
+                piece.userData.isColliding = false;
+                if (!app.selectedPieces.has(piece)) {
+                    piece.material.color.setHex(0xB8956F);
+                }
+            });
+            
+            updateGuideLines();
+            updateHotkeyGuide();
+            
+            // Force a quick collision check to ensure current states
+            setTimeout(() => checkCollisions(), 10);
+        }
+        
+        function endMovement(save = true) {
+            if (app.movementState.active && save) {
+                const movedDistance = app.movementState.currentOffset.lengthSq();
+                if (movedDistance > 0.000001) {
+                    saveState();
+                    saveCurrentProject();
+                    // Force a collision check after movement to update collision states
+                    checkCollisions();
+                    updateProjectDetails();
+                }
+            }
+            
+            app.movementState.active = false;
+            app.movementState.mode = null;
+            app.movementState.axis = null;
+            app.movementState.currentOffset.set(0, 0, 0);
+            app.movementState.startPositions.clear();
+            app.movementState.typedValue = '';
+            app.movementState.isDragging = false;
+            
+            // Clear reference plane data for free movement
+            app.movementState.referencePlane = null;
+            app.movementState.referenceCenter = null;
+            app.movementState.initialIntersection = null;
+            
+            clearGuideLines();
+            hideMeasurement();
+            hideSnapIndicator();
+            updateHotkeyGuide();
+            
+            // Force collision check to ensure states are current
+            checkCollisions();
+        }
+        
+        // --- END UNIFIED MOVEMENT SYSTEM ---
+        
+        function loadCollapsedState() {
+            try {
+                const saved = localStorage.getItem('woodCollapsedThicknesses');
+                if (saved) {
+                    const collapsed = JSON.parse(saved);
+                    app.collapsedThicknesses = new Set(collapsed);
+                }
+            } catch (e) {
+                console.error('Failed to load collapsed state:', e);
+                app.collapsedThicknesses = new Set();
+            }
+        }
+        
+        function saveCollapsedState() {
+            try {
+                localStorage.setItem('woodCollapsedThicknesses', JSON.stringify(Array.from(app.collapsedThicknesses)));
+            } catch (e) {
+                console.error('Failed to save collapsed state:', e);
+            }
+        }
+        
+        function toggleThicknessGroup(thickness) {
+            const groupElement = document.querySelector(`[data-thickness-group="${thickness}"]`);
+            if (!groupElement) return;
+            
+            if (app.collapsedThicknesses.has(thickness)) {
+                app.collapsedThicknesses.delete(thickness);
+                groupElement.classList.remove('collapsed');
+            } else {
+                app.collapsedThicknesses.add(thickness);
+                groupElement.classList.add('collapsed');
+            }
+            saveCollapsedState();
+        }
+        
+        function calculateLumberCost(thickness, width) {
+            const crossSection = thickness * width; // mm²
+            let baseCostPerMm2 = 0.008; 
+            if (thickness >= 98 || width >= 98) baseCostPerMm2 *= 1.4;
+            if (thickness >= 48 && width >= 148) baseCostPerMm2 *= 0.95;
+            if (thickness === 98 && width === 98) return 119;
+            if (thickness === 48 && width === 148) return 54.9;
+            if (thickness === 48 && width === 98) return 33.8;
+            if (thickness === 48 && width === 198) return 76.9;
+            const pricePerMeter = crossSection * baseCostPerMm2;
+            return Math.round(pricePerMeter * 10) / 10;
+        }
+        
+        function snapToGrid(value) {
+            if (!app.gridSnapEnabled) return value;
+            return Math.round(value * 1000 / app.gridSize) * app.gridSize / 1000;
+        }
+        
+        function snapVectorToGrid(vector) {
+            if (!app.gridSnapEnabled) return vector.clone();
+            return new THREE.Vector3(
+                snapToGrid(vector.x),
+                snapToGrid(vector.y),
+                snapToGrid(vector.z)
+            );
+        }
+        
+        app.toggleGridSnap = function() {
+            app.gridSnapEnabled = !app.gridSnapEnabled;
+            document.getElementById('gridToggle').classList.toggle('active', app.gridSnapEnabled);
+            showStatus(`Grid snap ${app.gridSnapEnabled ? 'enabled' : 'disabled'}`);
+            updateProjectDetails();
         };
         
-        // Menu toggle functions
+        function updateProjectDetails() {
+            let totalCost = 0;
+            let totalWeight = 0;
+            let totalPieces = 0;
+            const materialUsage = {};
+            
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece) {
+                    totalPieces++;
+                    const { thickness, width, length } = obj.userData;
+                    const lengthInMeters = length / 1000;
+                    const costPerMeter = calculateLumberCost(thickness, width);
+                    totalCost += costPerMeter * lengthInMeters;
+                    const volumeInCm3 = (thickness / 10) * (width / 10) * (length / 10);
+                    totalWeight += (volumeInCm3 * app.woodDensity) / 1000;
+                    const key = `${thickness}×${width}mm`;
+                    materialUsage[key] = (materialUsage[key] || 0) + lengthInMeters;
+                }
+            });
+            
+            document.getElementById('totalCost').textContent = `${totalCost.toFixed(0)} kr`;
+            document.getElementById('totalWeight').textContent = `${totalWeight.toFixed(1)} kg`;
+            document.getElementById('totalPieces').textContent = totalPieces.toString();
+            
+            const breakdownDiv = document.getElementById('materialsBreakdown');
+            breakdownDiv.innerHTML = '';
+            Object.entries(materialUsage).sort().forEach(([dimension, meters]) => {
+                const item = document.createElement('div');
+                item.className = 'material-item';
+                item.innerHTML = `<span>${dimension}</span><span>${meters.toFixed(2)}m</span>`;
+                breakdownDiv.appendChild(item);
+            });
+        }
+        
+        function createSelectionOutline(piece) {
+            removeSelectionOutline(piece); 
+            const edges = new THREE.EdgesGeometry(piece.geometry); 
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x4fc3f7, linewidth: 2 }); 
+            const edgeLines = new THREE.LineSegments(edges, lineMaterial);
+            
+            edgeLines.position.copy(piece.position);
+            edgeLines.quaternion.copy(piece.quaternion);
+            edgeLines.scale.copy(piece.scale); 
+            
+            app.scene.add(edgeLines);
+            app.selectionOutlines.set(piece, edgeLines);
+            piece.userData.edgeLines = edgeLines; 
+        }
+
+        function removeSelectionOutline(piece) {
+            const outline = app.selectionOutlines.get(piece);
+            if (outline) {
+                app.scene.remove(outline);
+                if (outline.geometry) outline.geometry.dispose();
+                if (outline.material) outline.material.dispose();
+                app.selectionOutlines.delete(piece);
+                delete piece.userData.edgeLines;
+            }
+        }
+
+        function createResizeIndicator(piece, face) {
+            removeResizeIndicator(piece);
+            const { thickness, width } = piece.userData; 
+            const length = piece.userData.currentPreviewLength || piece.userData.length; 
+
+            const t_m = thickness / 1000;
+            const w_m = width / 1000;
+            const l_m = length / 1000;
+            
+            const z = face === 'top' ? l_m / 2 : -l_m / 2;
+            const cylinderRadius = 0.002;
+            const edgeGroup = new THREE.Group();
+            const corners = [
+                new THREE.Vector3(-t_m/2, -w_m/2, z), new THREE.Vector3(t_m/2, -w_m/2, z),
+                new THREE.Vector3(t_m/2, w_m/2, z), new THREE.Vector3(-t_m/2, w_m/2, z)
+            ];
+
+            for (let i = 0; i < 4; i++) {
+                const start = corners[i];
+                const end = corners[(i + 1) % 4];
+                const edgeVector = end.clone().sub(start);
+                const edgeLength = edgeVector.length();
+                const edgeCenter = start.clone().add(end).multiplyScalar(0.5);
+                
+                const cylinderGeometry = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, edgeLength, 8);
+                const cylinderMaterial = new THREE.MeshBasicMaterial({ color: 0x0d47a1 });
+                const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+                
+                cylinder.position.copy(edgeCenter);
+                if (edgeLength > 0) {
+                    cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), edgeVector.clone().normalize());
+                }
+                edgeGroup.add(cylinder);
+            }
+            
+            edgeGroup.position.copy(piece.position);
+            edgeGroup.quaternion.copy(piece.quaternion);
+
+            const offsetFactor = 0.0015; 
+            const offsetVector = new THREE.Vector3(0, 0, face === 'top' ? offsetFactor : -offsetFactor);
+            offsetVector.applyQuaternion(piece.quaternion); 
+            edgeGroup.position.add(offsetVector);
+
+            edgeGroup.userData.isResizeIndicator = true;
+            app.scene.add(edgeGroup);
+            app.resizeIndicators.set(piece, edgeGroup);
+        }
+
+        function removeResizeIndicator(piece) {
+            const indicator = app.resizeIndicators.get(piece);
+            if (indicator) {
+                app.scene.remove(indicator);
+                indicator.traverse((child) => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) child.material.dispose();
+                });
+                app.resizeIndicators.delete(piece);
+            }
+        }
+
+        function updateVisualHelpers() {
+            app.selectedPieces.forEach(piece => {
+                createSelectionOutline(piece); 
+            });
+        }
+
+        function updateResizeIndicators() {
+            if (app.movementState.lengthEditData && app.movementState.lengthEditData.pieces) {
+                app.movementState.lengthEditData.pieces.forEach(piece => {
+                    const editData = app.movementState.lengthEditData.pieceData.get(piece);
+                    if (editData) {
+                        createResizeIndicator(piece, editData.editFace);
+                    }
+                });
+            }
+        }
+        
+        function trackActivity() {
+            app.lastActivity = Date.now();
+            document.getElementById('hotkeyGuide').classList.remove('hidden');
+            clearTimeout(app.activityTimeout);
+            app.activityTimeout = setTimeout(() => {
+                if (Date.now() - app.lastActivity >= 5000) {
+                    document.getElementById('hotkeyGuide').classList.add('hidden');
+                }
+            }, 5000);
+        }
+        
         function toggleMenu() {
             const panel = document.getElementById('sidePanel');
             const button = document.getElementById('menuButton');
             const overlay = document.getElementById('menuOverlay');
-            
             panel.classList.toggle('active');
             button.classList.toggle('active');
             overlay.classList.toggle('active');
+            trackActivity();
         }
-        
+
         function closeMenu() {
-            const panel = document.getElementById('sidePanel');
-            const button = document.getElementById('menuButton');
-            const overlay = document.getElementById('menuOverlay');
-            
-            panel.classList.remove('active');
-            button.classList.remove('active');
-            overlay.classList.remove('active');
+            document.getElementById('sidePanel').classList.remove('active');
+            document.getElementById('menuButton').classList.remove('active');
+            document.getElementById('menuOverlay').classList.remove('active');
         }
         
-        // Show status message
-        function showStatus(message) {
+        function toggleSettingsSection() {
+            const content = document.getElementById('settingsContent');
+            const icon = document.getElementById('settingsExpandIcon');
+            
+            content.classList.toggle('expanded');
+            icon.classList.toggle('expanded');
+            trackActivity();
+        }
+        
+        function showStatus(message, isError = false, duration = 2000) {
             const status = document.getElementById('statusIndicator');
             status.textContent = message;
+            status.style.backgroundColor = isError ? 'rgba(211, 47, 47, 0.9)' : 'rgba(33, 150, 243, 0.9)';
             status.classList.remove('hidden');
-            
             clearTimeout(app.statusTimeout);
-            app.statusTimeout = setTimeout(() => {
-                status.classList.add('hidden');
-            }, 2000);
+            app.statusTimeout = setTimeout(() => status.classList.add('hidden'), duration);
         }
         
-        // Initialize the application
+        function showSnapIndicator(snapInfo) {
+            const indicator = document.getElementById('snapIndicator');
+            let text = '';
+            if (snapInfo.type === 'floor') {
+                text = '⌊ Floor Snap';
+            } else if (snapInfo.type === 'object') {
+                text = '⊞ Object Snap';
+            }
+            indicator.textContent = text;
+            indicator.classList.remove('hidden');
+            
+            // Position near cursor
+            const x = app.lastMouseX + 20;
+            const y = app.lastMouseY - 20;
+            indicator.style.left = `${x}px`;
+            indicator.style.top = `${y}px`;
+            
+            clearTimeout(indicator.hideTimeout);
+            indicator.hideTimeout = setTimeout(() => {
+                indicator.classList.add('hidden');
+            }, 1000);
+        }
+        
+        function hideSnapIndicator() {
+            const indicator = document.getElementById('snapIndicator');
+            indicator.classList.add('hidden');
+        }
+        
+        function findNonOverlappingPosition(piece, preferredPosition, maxAttempts = 50) {
+            const allPieces = Array.from(app.scene.children.filter(obj => obj.userData.isWoodPiece && obj !== piece));
+            
+            piece.position.copy(preferredPosition);
+            piece.updateMatrixWorld(true);
+            
+            let foundPosition = false;
+            let attempts = 0;
+            
+            while (!foundPosition && attempts < maxAttempts) {
+                const pieceBox = new THREE.Box3().setFromObject(piece);
+                pieceBox.expandByScalar(-GEOMETRY_PADDING);
+                
+                let hasOverlap = false;
+                for (const otherPiece of allPieces) {
+                    const otherBox = new THREE.Box3().setFromObject(otherPiece);
+                    otherBox.expandByScalar(-GEOMETRY_PADDING);
+                    
+                    if (boxesOverlap(pieceBox, otherBox, COLLISION_TOLERANCE)) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+                
+                if (!hasOverlap) {
+                    foundPosition = true;
+                } else {
+                    const angle = (attempts * 0.5) * Math.PI;
+                    const radius = 0.05 + (attempts * 0.02); 
+                    piece.position.x = preferredPosition.x + Math.cos(angle) * radius;
+                    piece.position.y = preferredPosition.y + Math.sin(angle) * radius;
+                    piece.position.copy(snapVectorToGrid(piece.position));
+                    piece.updateMatrixWorld(true);
+                    attempts++;
+                }
+            }
+            
+            // Final floor constraint
+            const finalBox = new THREE.Box3().setFromObject(piece);
+            if (finalBox.min.z < 0) {
+                piece.position.z += -finalBox.min.z;
+                piece.position.z = snapToGrid(piece.position.z);
+            }
+            
+            return foundPosition;
+        }
+        
+        function checkCollisions() {
+            const pieces = Array.from(app.scene.children.filter(obj => obj.userData.isWoodPiece));
+            
+            // Reset all pieces to normal color and collision state
+            pieces.forEach(piece => {
+                piece.userData.isColliding = false;
+                if (!app.selectedPieces.has(piece)) {
+                    piece.material.color.setHex(0xB8956F);
+                }
+            });
+            
+            // Check for collisions between different pieces
+            // Using i, j+1 pattern ensures we never check a piece against itself
+            for (let i = 0; i < pieces.length; i++) {
+                for (let j = i + 1; j < pieces.length; j++) {
+                    const piece1 = pieces[i];
+                    const piece2 = pieces[j];
+                    
+                    // Additional safety check - should never happen with i,j+1 pattern
+                    if (piece1 === piece2) {
+                        console.warn('Self-collision check detected - this should not happen!');
+                        continue;
+                    }
+                    
+                    // Ensure both pieces exist and have valid userData
+                    if (!piece1.userData.isWoodPiece || !piece2.userData.isWoodPiece) {
+                        continue;
+                    }
+                    
+                    const box1 = new THREE.Box3().setFromObject(piece1);
+                    const box2 = new THREE.Box3().setFromObject(piece2);
+                    
+                    // Account for geometry padding
+                    box1.expandByScalar(-GEOMETRY_PADDING);
+                    box2.expandByScalar(-GEOMETRY_PADDING);
+                    
+                    if (boxesOverlap(box1, box2, COLLISION_TOLERANCE)) {
+                        piece1.userData.isColliding = true;
+                        piece2.userData.isColliding = true;
+                        piece1.material.color.setHex(0xff4444);
+                        piece2.material.color.setHex(0xff4444);
+                    }
+                }
+            }
+            
+            updateInfoPanel();
+        }
+        
+        function calculatePieceInfo(piece) {
+            const { thickness, width, length } = piece.userData;
+            const volumeInCm3 = (thickness / 10) * (width / 10) * (length / 10);
+            const weightInKg = (volumeInCm3 * app.woodDensity) / 1000;
+            const costPerMeter = calculateLumberCost(thickness, width);
+            const cost = costPerMeter * (length / 1000);
+            const box = new THREE.Box3().setFromObject(piece);
+            const heightAboveFloor = Math.max(0, box.min.z * 1000);
+            return { 
+                dimensions: `${thickness}×${width}×${length}mm`, 
+                volume: volumeInCm3, 
+                weight: weightInKg, 
+                cost: cost, 
+                costPerMeter: costPerMeter, 
+                heightAboveFloor: heightAboveFloor 
+            };
+        }
+        
+        function updateInfoPanel() {
+            const infoPanel = document.getElementById('infoPanel');
+            const infoContent = document.getElementById('infoContent');
+            
+            if (app.selectedPieces.size === 0) {
+                infoPanel.classList.add('hidden');
+                return;
+            }
+            
+            infoPanel.classList.remove('hidden');
+            let totalVolume = 0, totalWeight = 0, totalCost = 0, infoHtml = '';
+            
+            if (app.selectedPieces.size === 1) {
+                const piece = Array.from(app.selectedPieces)[0];
+                const info = calculatePieceInfo(piece);
+                infoHtml = `<div class="info-row"><span class="info-label">Dimensions:</span><span class="info-value">${info.dimensions}</span></div>` +
+                           `<div class="info-row"><span class="info-label">Height:</span><span class="info-value">${Math.round(info.heightAboveFloor)}mm</span></div>` +
+                           `<div class="info-row"><span class="info-label">Volume:</span><span class="info-value">${info.volume.toFixed(1)}cm³</span></div>` +
+                           `<div class="info-row"><span class="info-label">Weight:</span><span class="info-value">${info.weight.toFixed(2)}kg</span></div>` +
+                           `<div class="info-row"><span class="info-label">Cost:</span><span class="info-value">${info.cost.toFixed(2)}kr</span></div>` +
+                           `<div class="info-row"><span class="info-label">Price/m:</span><span class="info-value">${info.costPerMeter.toFixed(1)}kr</span></div>`;
+            } else {
+                app.selectedPieces.forEach(piece => {
+                    const info = calculatePieceInfo(piece);
+                    totalVolume += info.volume;
+                    totalWeight += info.weight;
+                    totalCost += info.cost;
+                });
+                infoHtml = `<div class="info-row"><span class="info-label">Pieces:</span><span class="info-value">${app.selectedPieces.size}</span></div>` +
+                           `<div class="info-row"><span class="info-label">Total Volume:</span><span class="info-value">${totalVolume.toFixed(1)}cm³</span></div>` +
+                           `<div class="info-row"><span class="info-label">Total Weight:</span><span class="info-value">${totalWeight.toFixed(2)}kg</span></div>` +
+                           `<div class="info-row"><span class="info-label">Total Cost:</span><span class="info-value">${totalCost.toFixed(2)}kr</span></div>`;
+            }
+            
+            let hasCollisions = false;
+            app.selectedPieces.forEach(piece => {
+                if (piece.userData.isColliding) hasCollisions = true;
+            });
+            
+            if (hasCollisions) {
+                infoHtml += '<div class="collision-warning">⚠️ Collision detected!</div>';
+            }
+            
+            infoContent.innerHTML = infoHtml;
+        }
+        
         function init() {
-            // Setup Three.js
             app.scene = new THREE.Scene();
             app.scene.background = new THREE.Color(0x1a1a1a);
             app.scene.fog = new THREE.Fog(0x1a1a1a, 10, 50);
             
-            // Camera setup (Z is up)
-            app.camera = new THREE.PerspectiveCamera(
-                75,
-                window.innerWidth / window.innerHeight,
-                0.1,
-                1000
-            );
-            updateCameraPosition(); // Initial position
+            app.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            updateCameraPosition();
             
-            // Renderer
             const canvas = document.getElementById('canvas');
             app.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
             app.renderer.setSize(window.innerWidth, window.innerHeight);
             app.renderer.shadowMap.enabled = true;
             app.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             app.scene.add(ambientLight);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-            directionalLight.position.set(5, -5, 10); // Adjusted Y for better angle
-            directionalLight.castShadow = true;
-            directionalLight.shadow.camera.left = -10;
-            directionalLight.shadow.camera.right = 10;
-            directionalLight.shadow.camera.top = 10;
-            directionalLight.shadow.camera.bottom = -10;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
-            app.scene.add(directionalLight);
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight1.position.set(5, -5, 10);
+            directionalLight1.castShadow = true;
+            directionalLight1.shadow.camera.left = -10;
+            directionalLight1.shadow.camera.right = 10;
+            directionalLight1.shadow.camera.top = 10;
+            directionalLight1.shadow.camera.bottom = -10;
+            directionalLight1.shadow.mapSize.width = 2048;
+            directionalLight1.shadow.mapSize.height = 2048;
+            app.scene.add(directionalLight1);
             
-            // Ground plane (solid gray)
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight2.position.set(-3, 3, 8);
+            app.scene.add(directionalLight2);
+            
+            const fillLight = new THREE.DirectionalLight(0x4fc3f7, 0.2);
+            fillLight.position.set(0, 0, -5);
+            app.scene.add(fillLight);
+            
             const groundGeometry = new THREE.BoxGeometry(40, 40, 0.1);
-            const groundMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x4a4a4a,
-                roughness: 0.9,
-                metalness: 0.1
-            });
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.9, metalness: 0.1 });
             const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-            ground.position.z = -0.05; // Center of the ground box is at z=-0.05, so top surface is at z=0
+            ground.position.z = -0.05;
             ground.receiveShadow = true;
             ground.userData.isGround = true;
             app.scene.add(ground);
             
-            // Add subtle grid on top of ground
             const gridHelper = new THREE.GridHelper(40, 80, 0x555555, 0x3a3a3a);
             gridHelper.rotation.x = Math.PI / 2;
-            gridHelper.position.z = 0.001; // Slightly above the ground surface
+            gridHelper.position.z = 0.001;
             app.scene.add(gridHelper);
             
-            // Initialize UI
+            loadCollapsedState();
             initializeMaterialPanel();
-            loadProjects();
+            loadProjects(); 
             
-            // Create measurement element
+            // Initialize UI states for settings section elements
+            const gridToggleElement = document.getElementById('gridToggle');
+            if (gridToggleElement) {
+                gridToggleElement.classList.toggle('active', app.gridSnapEnabled);
+            }
+
+            // The settings section (settingsContent and settingsExpandIcon)
+            // should default to a collapsed state based on CSS.
+            // toggleSettingsSection() will manage their 'expanded' classes.
+            // No specific initialization is needed here if CSS handles the default collapsed state.
+
             app.measurementElement = document.getElementById('measurement');
             
-            // Event listeners
             setupEventListeners();
-            
-            // Hide loading
             document.getElementById('loading').style.display = 'none';
-            
-            // Start render loop
+            trackActivity();
             animate();
         }
         
-        // Update camera position based on spherical coordinates
         function updateCameraPosition() {
-            // Phi: polar angle (from positive Z-axis). 0 = top, PI = bottom.
-            // Theta: azimuthal angle (in XY plane, from positive X-axis).
             app.camera.position.x = app.cameraTarget.x + app.cameraDistance * Math.sin(app.cameraPhi) * Math.cos(app.cameraTheta);
             app.camera.position.y = app.cameraTarget.y + app.cameraDistance * Math.sin(app.cameraPhi) * Math.sin(app.cameraTheta);
             app.camera.position.z = app.cameraTarget.z + app.cameraDistance * Math.cos(app.cameraPhi);
-            
-            app.camera.up.set(0, 0, 1); // Ensure Z is up for horizon lock
+            app.camera.up.set(0, 0, 1);
             app.camera.lookAt(app.cameraTarget);
         }
         
-        // Initialize material selection panel
         function initializeMaterialPanel() {
             const materialList = document.getElementById('materialList');
-            
-            app.woodDimensions.forEach((group, groupIndex) => {
+            app.woodDimensions.forEach((group) => {
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'thickness-group';
+                groupDiv.setAttribute('data-thickness-group', group.thickness);
+                if (app.collapsedThicknesses.has(group.thickness)) groupDiv.classList.add('collapsed');
                 
-                const groupTitle = document.createElement('h4');
-                groupTitle.textContent = `${group.thickness}mm Thickness`;
-                groupDiv.appendChild(groupTitle);
+                const header = document.createElement('div');
+                header.className = 'thickness-header';
+                header.onclick = () => toggleThicknessGroup(group.thickness);
                 
-                group.widths.forEach((width, widthIndex) => {
+                const title = document.createElement('h4');
+                title.textContent = `${group.thickness}mm Thickness`;
+                
+                const collapseIcon = document.createElement('div');
+                collapseIcon.className = 'collapse-icon';
+                
+                header.append(title, collapseIcon);
+                groupDiv.appendChild(header);
+                
+                const widthOptionsDiv = document.createElement('div');
+                widthOptionsDiv.className = 'width-options';
+                
+                group.widths.forEach((width) => {
                     const option = document.createElement('div');
                     option.className = 'wood-option';
                     option.dataset.thickness = group.thickness;
                     option.dataset.width = width;
                     
-                    const icon = document.createElement('canvas');
-                    icon.className = 'wood-icon';
-                    icon.width = 40;
-                    icon.height = 40;
-                    const ctx = icon.getContext('2d');
-                    
-                    const scale = 0.3; 
-                    const t = group.thickness * scale;
-                    const w = width * scale;
-                    
+                    const iconCanvas = document.createElement('canvas');
+                    iconCanvas.className = 'wood-icon';
+                    iconCanvas.width = 60;
+                    iconCanvas.height = 20;
+                    const ctx = iconCanvas.getContext('2d');
+                    const scale = 0.3;
+                    const w = Math.min(width * scale, 55);
+                    const t = group.thickness * scale * 0.3;
+                    const x = (60 - w) / 2;
+                    const y = (20 - t) / 2;
                     ctx.fillStyle = '#8B6F47';
-                    ctx.fillRect(
-                        (40 - t) / 2,
-                        (40 - w) / 2,
-                        t,
-                        w
-                    );
-                    
+                    ctx.fillRect(x, y, w, t);
                     ctx.strokeStyle = '#6B5637';
-                    ctx.strokeRect(
-                        (40 - t) / 2,
-                        (40 - w) / 2,
-                        t,
-                        w
-                    );
+                    ctx.strokeRect(x, y, w, t);
                     
                     const label = document.createElement('div');
                     label.className = 'wood-label';
-                    label.textContent = `${group.thickness}×${width}mm`;
+                    label.textContent = `${width}mm`;
                     
-                    option.appendChild(icon);
-                    option.appendChild(label);
-                    
+                    option.append(iconCanvas, label);
                     option.addEventListener('click', () => {
                         selectWoodDimension(group.thickness, width);
                         closeMenu();
                     });
                     
-                    groupDiv.appendChild(option);
+                    widthOptionsDiv.appendChild(option);
                 });
                 
+                groupDiv.appendChild(widthOptionsDiv);
                 materialList.appendChild(groupDiv);
             });
         }
         
-        // Select wood dimension
         function selectWoodDimension(thickness, width) {
-            document.querySelectorAll('.wood-option').forEach(opt => {
-                opt.classList.remove('active');
-            });
-            
-            const selected = document.querySelector(
-                `.wood-option[data-thickness="${thickness}"][data-width="${width}"]`
-            );
-            if (selected) {
-                selected.classList.add('active');
-            }
+            document.querySelectorAll('.wood-option.active').forEach(opt => opt.classList.remove('active'));
+            const selectedOpt = document.querySelector(`.wood-option[data-thickness="${thickness}"][data-width="${width}"]`);
+            if (selectedOpt) selectedOpt.classList.add('active');
             
             app.selectedDimension = { thickness, width };
-            
             const key = `${thickness}x${width}`;
             app.recentDimensions = app.recentDimensions.filter(d => d !== key);
             app.recentDimensions.unshift(key);
-            if (app.recentDimensions.length > 10) {
-                app.recentDimensions.pop();
-            }
+            if (app.recentDimensions.length > 10) app.recentDimensions.pop();
             
             createWoodPiece(thickness, width);
         }
         
-        // Create wood piece
+        function createRoundedBoxGeometry(width, height, depth, radius = 0.003, bevelSegments = 4) {
+            const shape = new THREE.Shape();
+            const w = width / 2 - radius;
+            const h = height / 2 - radius;
+            
+            shape.moveTo(-w, -h); 
+            shape.lineTo(w, -h);  
+            shape.quadraticCurveTo(w + radius, -h, w + radius, -h + radius); 
+            shape.lineTo(w + radius, h); 
+            shape.quadraticCurveTo(w + radius, h + radius, w, h + radius); 
+            shape.lineTo(-w, h + radius); 
+            shape.quadraticCurveTo(-w - radius, h + radius, -w - radius, h); 
+            shape.lineTo(-w - radius, -h + radius); 
+            shape.quadraticCurveTo(-w - radius, -h, -w, -h); 
+
+            const extrudeSettings = {
+                depth: depth,
+                bevelEnabled: true,
+                bevelSegments: bevelSegments, 
+                steps: 1,
+                bevelSize: radius, 
+                bevelThickness: radius 
+            };
+            
+            const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            geometry.center(); 
+            return geometry;
+        }
+        
         function createWoodPiece(thickness, width, length = 500) {
-            const t = thickness / 1000; // depth (X)
-            const w = width / 1000;   // width (Y)
-            const l = length / 1000;  // height (Z, length of wood)
-            
-            const geometry = new THREE.BoxGeometry(t, w, l);
-            const material = new THREE.MeshStandardMaterial({
-                color: 0x8B6F47,
-                roughness: 0.7,
-                metalness: 0.1
-            });
-            
+            const t = thickness / 1000;
+            const w = width / 1000;
+            const l = length / 1000;
+            const geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4); 
+            const material = new THREE.MeshStandardMaterial({ color: 0xB8956F, roughness: 0.6, metalness: 0.05 });
             const piece = new THREE.Mesh(geometry, material);
             piece.castShadow = true;
             piece.receiveShadow = true;
             
-            piece.userData = {
-                thickness, // Store original mm dimensions
-                width,
-                length,
-                isWoodPiece: true
+            // Add unique ID for better collision debugging
+            const pieceId = 'piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            piece.userData = { 
+                thickness, 
+                width, 
+                length, 
+                isWoodPiece: true, 
+                geometryVersion: 1,
+                id: pieceId
             };
             
-            // Position on the floor at camera target, ensuring it's above ground
-            const halfLength = l / 2;
-            piece.position.set(
-                app.cameraTarget.x,
-                app.cameraTarget.y,
-                Math.max(halfLength, 0) // Ensure bottom is at or above Z=0
+            const halfLength = l / 2; 
+            const preferredPosition = new THREE.Vector3(
+                snapToGrid(app.cameraTarget.x),
+                snapToGrid(app.cameraTarget.y),
+                Math.max(halfLength, 0)
             );
             
             app.scene.add(piece);
+            if (!findNonOverlappingPosition(piece, preferredPosition)) {
+                showStatus('No space found - placed with offset', true);
+            }
             
             clearSelection();
             app.selectedPieces.add(piece);
@@ -714,12 +1979,13 @@
             
             saveState();
             saveCurrentProject();
-            
             updateHotkeyGuide();
+            updateInfoPanel();
+            updateProjectDetails();
+            checkCollisions();
             showStatus(`Created ${thickness}×${width}mm piece`);
         }
         
-        // Setup event listeners
         function setupEventListeners() {
             window.addEventListener('resize', onWindowResize);
             document.addEventListener('mousedown', onMouseDown);
@@ -728,7 +1994,8 @@
             document.addEventListener('contextmenu', e => e.preventDefault());
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
-            document.addEventListener('wheel', onMouseWheel);
+            document.addEventListener('wheel', onMouseWheel, { passive: false }); 
+            document.addEventListener('click', handleDocumentClickForInputs, true);
         }
         
         function onWindowResize() {
@@ -738,56 +2005,67 @@
         }
         
         function onMouseDown(event) {
-            if (event.target.id !== 'canvas') return;
+            trackActivity();
             
-            if (event.button === 0) { // Left mouse button
+            if (event.target.closest('.project-actions') || 
+                event.target.closest('.project-delete-confirm') || 
+                event.target.closest('.project-edit-form') || 
+                event.target.closest('.new-project-input-item')) {
+                return;
+            }
+            
+            if (event.target.id !== 'canvas') return;
+            updateMouse(event);
+
+            if (event.button === 0) { 
                 app.mouseDown = true;
-                updateMouse(event);
-                
                 app.raycaster.setFromCamera(app.mouse, app.camera);
                 const objects = app.scene.children.filter(obj => obj.userData.isWoodPiece);
-                const intersects = app.raycaster.intersectObjects(objects);
-                
+                const intersects = app.raycaster.intersectObjects(objects, false); 
+
                 if (intersects.length > 0) {
                     const clickedPiece = intersects[0].object;
                     const intersectionPoint = intersects[0].point;
                     
                     if (app.keys['v'] && app.selectedPieces.has(clickedPiece)) {
-                        // Length editing mode
+                        // Length edit mode
                         const face = intersects[0].face;
-                        const normal = face.normal.clone();
-                        // Transform normal to world space
-                        normal.transformDirection(clickedPiece.matrixWorld); 
+                        const localNormal = face.normal.clone();
+                        const pieceNormal = new THREE.Vector3(0,0,1).applyQuaternion(clickedPiece.quaternion);
                         
-                        // Determine if clicked face is an "end" face (along local Z axis of the piece)
-                        // This assumes BoxGeometry is (thickness, width, length) -> (X, Y, Z)
-                        const localNormal = face.normal.clone(); // Normal in piece's local space
-                        
-                        if (Math.abs(localNormal.z) > 0.9) { // Clicked one of the Z-faces (ends)
-                            app.isLengthEditing = true;
-                            app.lengthEditPiece = clickedPiece;
-                            // 'top' for +Z face, 'bottom' for -Z face in local coords
-                            app.lengthEditFace = localNormal.z > 0 ? 'top' : 'bottom'; 
-                            app.lengthEditOriginalLength = clickedPiece.userData.length;
-                            app.lengthEditOriginalPosition = clickedPiece.position.clone();
-                            app.lengthEditOriginalQuaternion = clickedPiece.quaternion.clone();
-                            app.lastMouseX = event.clientX; // Reset for length editing delta
-                            app.lastMouseY = event.clientY;
-                            showStatus('Length edit mode. Drag mouse.');
+                        if (Math.abs(localNormal.dot(pieceNormal)) > 0.9) {
+                            const worldNormal = localNormal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(clickedPiece.matrixWorld)).normalize();
+                            const pZAxis = new THREE.Vector3(0,0,1).applyQuaternion(clickedPiece.quaternion);
+                            const editFace = worldNormal.dot(pZAxis) > 0 ? 'top' : 'bottom';
+                            
+                            app.movementState.lengthEditData = {
+                                pieces: new Set(app.selectedPieces),
+                                pieceData: new Map(),
+                                startMouseX: event.clientX
+                            };
+                            
+                            app.selectedPieces.forEach(p => {
+                                app.movementState.lengthEditData.pieceData.set(p, {
+                                    originalLength: p.userData.length,
+                                    originalPosition: p.position.clone(),
+                                    originalQuaternion: p.quaternion.clone(),
+                                    editFace: editFace
+                                });
+                                createResizeIndicator(p, editFace);
+                            });
+                            
+                            showStatus(`Length edit mode (${app.selectedPieces.size} pieces). Drag or type value.`);
                         } else {
-                            showStatus('Click an end-face (along length) to adjust length with V.');
+                            showStatus('Click an end-face (along length) to adjust length with V.', true);
                         }
                     } else if (app.keys['e']) {
                         duplicatePiece(clickedPiece);
-                    } else if (app.movementAxis && app.selectedPieces.has(clickedPiece)) {
-                        app.isDraggingPiece = true;
-                        app.dragStartPos = intersectionPoint.clone(); // World space point
-                        app.initialPiecePositions.clear();
-                        app.selectedPieces.forEach(p => {
-                            app.initialPiecePositions.set(p, p.position.clone());
-                        });
+                    } else if (app.movementState.axis && app.selectedPieces.has(clickedPiece)) {
+                        // Start axis-constrained drag
+                        startMovement('drag', app.movementState.axis);
+                        app.movementState.isDragging = true;
                     } else {
-                        // Selection
+                        // Selection logic
                         if (event.ctrlKey) {
                             if (app.selectedPieces.has(clickedPiece)) {
                                 app.selectedPieces.delete(clickedPiece);
@@ -802,72 +2080,114 @@
                                 app.selectedPieces.add(clickedPiece);
                                 updatePieceSelection(clickedPiece, true);
                             }
-                            // If already selected and not dragging, allow starting drag
-                            app.isDraggingPiece = true; // Allow dragging selected piece without axis key
-                            app.dragStartPos = intersectionPoint.clone();
-                            app.initialPiecePositions.clear();
-                            app.selectedPieces.forEach(p => {
-                                app.initialPiecePositions.set(p, p.position.clone());
-                            });
-
+                            // Start free drag
+                            startMovement('drag', 'free');
+                            app.movementState.isDragging = true;
                         }
                         updateHotkeyGuide();
+                        updateInfoPanel();
                     }
-                } else if (!event.ctrlKey && !app.movementAxis) {
+                } else if (!event.ctrlKey && !app.movementState.axis) {
                     clearSelection();
                     updateHotkeyGuide();
+                    updateInfoPanel();
                 }
-                
-            } else if (event.button === 2) { // Right mouse button
+            } else if (event.button === 2) {
                 app.rightMouseDown = true;
             }
             
             app.lastMouseX = event.clientX;
             app.lastMouseY = event.clientY;
-            document.getElementById('canvas').classList.add('grabbing');
+            if (app.mouseDown || app.rightMouseDown) {
+                document.getElementById('canvas').classList.add('grabbing');
+            }
         }
         
         function onMouseMove(event) {
-            // Guard against calls before camera is initialized
-            if (!app.camera || !app.renderer) {
-                return;
-            }
+            trackActivity();
+            if (!app.camera || !app.renderer) return;
 
             const deltaX = event.clientX - app.lastMouseX;
             const deltaY = event.clientY - app.lastMouseY;
-            
-            updateMouse(event); // Keep mouse coords updated for raycasting
+            updateMouse(event);
 
-            if (app.isDraggingPiece) {
-                 if (app.movementAxis) {
-                    moveSelectedAlongAxis(event); 
-                 } else if (app.selectedPieces.size > 0 && app.mouseDown) {
-                    // Placeholder for potential free-drag logic if needed in future
-                 }
-            } else if (app.isLengthEditing) {
-                adjustLength(event);
-            } else if (app.mouseDown && !app.movementAxis) { // Left mouse drag - Panning
+            if (app.movementState.isDragging && app.movementState.active) {
+                // Handle piece movement
+                if (app.movementState.axis === 'z') {
+                    // Z-axis movement based on vertical mouse movement
+                    const zMoveSensitivity = 0.002;
+                    const zDelta = -deltaY * zMoveSensitivity * (app.cameraDistance / 3);
+                    const movement = new THREE.Vector3(0, 0, zDelta);
+                    const totalMovement = app.movementState.currentOffset.clone().add(movement);
+                    unifiedMove(app.selectedPieces, totalMovement, 'drag');
+                } else if (app.movementState.axis === 'x') {
+                    // X-axis movement based on horizontal mouse movement
+                    const sensitivity = 0.003 * (app.cameraDistance / 3);
+                    const xDelta = deltaX * sensitivity;
+                    const movement = new THREE.Vector3(xDelta, 0, 0);
+                    const totalMovement = app.movementState.currentOffset.clone().add(movement);
+                    unifiedMove(app.selectedPieces, totalMovement, 'drag');
+                } else if (app.movementState.axis === 'y') {
+                    // Y-axis movement based on vertical mouse movement  
+                    const sensitivity = 0.003 * (app.cameraDistance / 3);
+                    const yDelta = -deltaY * sensitivity;
+                    const movement = new THREE.Vector3(0, yDelta, 0);
+                    const totalMovement = app.movementState.currentOffset.clone().add(movement);
+                    unifiedMove(app.selectedPieces, totalMovement, 'drag');
+                } else if (app.movementState.axis === 'free') {
+                    // Free movement using stable reference plane (no flickering)
+                    if (app.movementState.referencePlane && app.movementState.initialIntersection) {
+                        app.raycaster.setFromCamera(app.mouse, app.camera);
+                        
+                        // Get current intersection with the STABLE reference plane
+                        const currentIntersection = new THREE.Vector3();
+                        const intersected = app.raycaster.ray.intersectPlane(app.movementState.referencePlane, currentIntersection);
+                        
+                        if (intersected) {
+                            // Calculate movement as difference from initial intersection point
+                            const movement = currentIntersection.clone().sub(app.movementState.initialIntersection);
+                            
+                            // Optional: Project movement onto XY plane if you want to prevent Z movement during free drag
+                            // movement.z = 0;
+                            
+                            unifiedMove(app.selectedPieces, movement, 'drag');
+                        }
+                    }
+                }
+            } else if (app.movementState.lengthEditData) {
+                // Handle length editing
+                const mouseDelta = event.clientX - app.movementState.lengthEditData.startMouseX;
+                const lengthDelta = mouseDelta * 2; // mm
+                
+                app.movementState.lengthEditData.pieces.forEach(piece => {
+                    const editData = app.movementState.lengthEditData.pieceData.get(piece);
+                    if (!editData) return;
+                    
+                    let newLength = editData.originalLength + (editData.editFace === 'top' ? lengthDelta : -lengthDelta);
+                    newLength = Math.max(MIN_PIECE_LENGTH * 1000, newLength);
+                    newLength = Math.round(newLength / 5) * 5; // Snap to 5mm
+                    
+                    applyLengthChange(piece, newLength, editData);
+                });
+                
+                updateResizeIndicators();
+                updateInfoPanel();
+            } else if (app.mouseDown && !app.movementState.axis) {
+                // Camera pan
                 const panSpeed = 0.003 * app.cameraDistance / 3;
                 const panVector = new THREE.Vector3();
-
-                // Get camera's local X-axis in world space (camera's "right")
-                const cameraWorldX = new THREE.Vector3().setFromMatrixColumn(app.camera.matrixWorld, 0);
-                panVector.addScaledVector(cameraWorldX, -deltaX * panSpeed);
-
-                // Get camera's local Y-axis in world space (camera's "up")
-                const cameraWorldY = new THREE.Vector3().setFromMatrixColumn(app.camera.matrixWorld, 1);
-                panVector.addScaledVector(cameraWorldY, deltaY * panSpeed); // Positive deltaY (mouse down) moves target "up" (camera view down)
-                
+                const camX = new THREE.Vector3().setFromMatrixColumn(app.camera.matrixWorld, 0);
+                panVector.addScaledVector(camX, -deltaX * panSpeed);
+                const camY = new THREE.Vector3().setFromMatrixColumn(app.camera.matrixWorld, 1);
+                panVector.addScaledVector(camY, deltaY * panSpeed);
                 app.cameraTarget.add(panVector);
                 updateCameraPosition();
-                
-            } else if (app.rightMouseDown) { // Right mouse drag - Orbiting
+            } else if (app.rightMouseDown) {
+                // Camera orbit
                 const orbitSpeed = 0.005;
-                app.cameraTheta -= deltaX * orbitSpeed; // Azimuthal angle
-                app.cameraPhi -= deltaY * orbitSpeed;   // Polar angle
-                
+                app.cameraTheta -= deltaX * orbitSpeed;
+                app.cameraPhi -= deltaY * orbitSpeed;
                 app.cameraPhi = Math.max(0.01, Math.min(Math.PI - 0.01, app.cameraPhi));
-                
                 updateCameraPosition();
             }
             
@@ -876,80 +2196,182 @@
         }
         
         function onMouseUp(event) {
-            if (event.button === 0) { // Left mouse
+            if (event.button === 0) {
                 app.mouseDown = false;
                 
-                if (app.isDraggingPiece || app.isLengthEditing) {
+                if (app.movementState.isDragging) {
+                    endMovement(true);
+                }
+                
+                if (app.movementState.lengthEditData) {
+                    // Finalize length changes
+                    app.movementState.lengthEditData.pieces.forEach(piece => {
+                        const editData = app.movementState.lengthEditData.pieceData.get(piece);
+                        if (editData && piece.userData.currentPreviewLength) {
+                            piece.userData.length = piece.userData.currentPreviewLength;
+                            delete piece.userData.currentPreviewLength;
+                            
+                            // Recreate geometry with final length
+                            if (piece.geometry) piece.geometry.dispose();
+                            const t = piece.userData.thickness / 1000;
+                            const w = piece.userData.width / 1000;
+                            const l = piece.userData.length / 1000;
+                            piece.geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
+                        }
+                    });
+                    
+                    // Clear resize indicators
+                    app.resizeIndicators.forEach((indicator, piece) => removeResizeIndicator(piece));
+                    app.movementState.lengthEditData = null;
+                    
                     saveState();
                     saveCurrentProject();
+                    checkCollisions();
+                    updateProjectDetails();
+                    hideMeasurement();
                 }
-                
-                app.isDraggingPiece = false;
-                app.initialPiecePositions.clear();
-
-                if (app.isLengthEditing) { 
-                    if (app.lengthEditPiece && app.lengthEditPiece.userData.length < 10) {
-                        showStatus(`Piece length too small (${app.lengthEditPiece.userData.length}mm), reverting may be needed.`);
-                    }
-                    app.isLengthEditing = false;
-                    app.lengthEditPiece = null;
-                    app.lengthEditFace = null;
-                }
-                
-            } else if (event.button === 2) { // Right mouse
+            } else if (event.button === 2) {
                 app.rightMouseDown = false;
             }
             
-            document.getElementById('canvas').classList.remove('grabbing');
-            clearSnapLines();
-            hideMeasurement();
+            if (!app.mouseDown && !app.rightMouseDown) {
+                document.getElementById('canvas').classList.remove('grabbing');
+            }
         }
         
         function onKeyDown(event) {
+            trackActivity();
             const key = event.key.toLowerCase();
+            
+            // Handle input field focus
+            if (document.activeElement && 
+                document.activeElement.tagName === 'INPUT' && 
+                document.activeElement.closest('.side-panel')) {
+                if (key === 'enter') { 
+                    if (app.isAddingProject && document.activeElement.classList.contains('new-project-name-input')) {
+                        app.gui.confirmNewProject();
+                    } else if (app.editingProjectName && document.activeElement.classList.contains('edit-project-name-input')) {
+                        app.gui.confirmRenameProject(app.editingProjectName, document.activeElement.value);
+                    }
+                } else if (key === 'escape') { 
+                    if (app.isAddingProject) app.gui.cancelNewProject();
+                    if (app.editingProjectName) app.gui.cancelRenameProject(app.editingProjectName);
+                }
+                return; 
+            }
+
+            // Movement mode keys
+            if (app.movementState.active && app.movementState.mode !== 'drag') {
+                // Handle arrow keys
+                if (key === 'arrowup' || key === 'arrowdown') {
+                    event.preventDefault();
+                    const stepSize = key === 'arrowup' ? 0.01 : -0.01; // 10mm steps
+                    
+                    if (app.movementState.lengthEditData) {
+                        // Step length adjustment
+                        app.movementState.lengthEditData.pieces.forEach(piece => {
+                            const currentLength = piece.userData.currentPreviewLength || piece.userData.length;
+                            const newLength = Math.max(MIN_PIECE_LENGTH * 1000, currentLength + stepSize * 1000);
+                            applyLengthChange(piece, newLength, app.movementState.lengthEditData.pieceData.get(piece));
+                        });
+                    } else if (app.movementState.axis) {
+                        // Step movement
+                        const movement = new THREE.Vector3();
+                        movement[app.movementState.axis] = app.movementState.currentOffset[app.movementState.axis] + stepSize;
+                        unifiedMove(app.selectedPieces, movement, 'step');
+                    }
+                    return;
+                }
+                
+                // Handle typed input
+                if ((key >= '0' && key <= '9') || key === '.' || key === '-') {
+                    event.preventDefault();
+                    if (key === '.' && app.movementState.typedValue.includes('.')) return;
+                    if (key === '-' && app.movementState.typedValue.length > 0) return;
+                    
+                    app.movementState.typedValue += key;
+                    updateTypedMeasurement();
+                    return;
+                }
+                
+                if (key === 'backspace') {
+                    event.preventDefault();
+                    if (app.movementState.typedValue.length > 0) {
+                        app.movementState.typedValue = app.movementState.typedValue.slice(0, -1);
+                        updateTypedMeasurement();
+                    }
+                    return;
+                }
+                
+                if (key === 'enter') {
+                    event.preventDefault();
+                    applyTypedMeasurement();
+                    return;
+                }
+            }
+            
             app.keys[key] = true;
             
+            // Global hotkeys
+            if (key === 'g' && !event.repeat) {
+                app.toggleGridSnap();
+            }
+            
+            // Close menu with Escape key
+            if (key === 'escape') {
+                closeMenu();
+            }
+            
+            // Zoom in/out with + and - keys
+            if ((key === '+' || key === '=' || event.code === 'Equal') && !event.repeat) {
+                // Zoom in
+                const zoomFactor = 0.9; // 10% closer
+                app.cameraDistance *= zoomFactor;
+                app.cameraDistance = Math.max(0.5, Math.min(20, app.cameraDistance));
+                updateCameraPosition();
+                showStatus(`Zoom: ${Math.round((3 / app.cameraDistance) * 100)}%`, false, 1000);
+            }
+            
+            if ((key === '-' || key === '_' || event.code === 'Minus') && !event.repeat) {
+                // Zoom out
+                const zoomFactor = 1.1; // 10% further
+                app.cameraDistance *= zoomFactor;
+                app.cameraDistance = Math.max(0.5, Math.min(20, app.cameraDistance));
+                updateCameraPosition();
+                showStatus(`Zoom: ${Math.round((3 / app.cameraDistance) * 100)}%`, false, 1000);
+            }
+            
+            // Movement axis keys
             if (app.selectedPieces.size > 0 && !event.repeat) {
-                let newAxis = null;
-                if (key === 'z') newAxis = 'z';
-                else if (key === 'x') newAxis = 'x';
-                else if (key === 'c') newAxis = 'y'; 
-
-                if (newAxis) {
-                    app.movementAxis = newAxis;
-                    updateSnapLines();
-                    showStatus(`${newAxis.toUpperCase()}-axis movement mode`);
-                    updateHotkeyGuide();
-                    if (app.mouseDown && app.selectedPieces.size > 0) {
-                        app.raycaster.setFromCamera(app.mouse, app.camera); // Ensure raycaster is current
-                        const intersects = app.raycaster.intersectObjects(Array.from(app.selectedPieces));
-                        if (intersects.length > 0) {
-                             app.isDraggingPiece = true;
-                             app.dragStartPos = intersects[0].point.clone();
-                             app.initialPiecePositions.clear();
-                             app.selectedPieces.forEach(p => {
-                                 app.initialPiecePositions.set(p, p.position.clone());
-                             });
-                        }
+                if (key === 'z' || key === 'x' || key === 'c') {
+                    const axis = key === 'z' ? 'z' : (key === 'x' ? 'x' : 'y');
+                    if (!app.movementState.active) {
+                        startMovement('key', axis);
+                        showStatus(`${axis.toUpperCase()}-axis movement mode`);
                     }
                 }
                 
-                if (key === 'a') rotateSelected('z');
-                else if (key === 's') rotateSelected('x');
-                else if (key === 'd') rotateSelected('y');
+                // Rotation keys
+                if (key === 'a') rotateSelected('localZ');
+                else if (key === 's') rotateSelected('localX');
+                else if (key === 'd') rotateSelected('localY');
             }
             
+            // Delete key
             if (key === 't' && app.selectedPieces.size > 0) {
                 deleteSelectedPieces();
             }
             
+            // Undo/Redo
             if (event.ctrlKey) {
                 if (key === 'z') { event.preventDefault(); undo(); }
                 else if (key === 'y') { event.preventDefault(); redo(); }
             }
             
+            // Quick material selection
             const numKey = parseInt(event.key);
-            if (!isNaN(numKey) && numKey >= 0 && numKey <= 9) {
+            if (!isNaN(numKey) && numKey >= 0 && numKey <= 9 && 
+                !app.movementState.active && !app.movementState.lengthEditData) {
                 const index = numKey === 0 ? 9 : numKey - 1;
                 if (app.recentDimensions[index]) {
                     const [thickness, width] = app.recentDimensions[index].split('x').map(Number);
@@ -962,25 +2384,30 @@
             const key = event.key.toLowerCase();
             delete app.keys[key];
             
-            if ((key === 'z' && app.movementAxis === 'z') ||
-                (key === 'x' && app.movementAxis === 'x') ||
-                (key === 'c' && app.movementAxis === 'y')) {
-                
-                if (app.isDraggingPiece) { 
-                    saveState();
-                    saveCurrentProject();
+            // End movement mode when axis key is released
+            if ((key === 'z' || key === 'x' || key === 'c') && 
+                app.movementState.active && 
+                app.movementState.mode === 'key') {
+                const axis = key === 'z' ? 'z' : (key === 'x' ? 'x' : 'y');
+                if (app.movementState.axis === axis) {
+                    endMovement(true);
                 }
-                app.movementAxis = null;
-                app.isDraggingPiece = false; 
-                clearSnapLines();
-                hideMeasurement();
-                updateHotkeyGuide();
             }
         }
         
         function onMouseWheel(event) {
-            const zoomSpeed = 0.1; 
-            app.cameraDistance *= (1 + event.deltaY * -zoomSpeed * 0.01); 
+            if (event.target.id !== 'canvas' && !document.getElementById('sidePanel').contains(event.target)) {
+                return;
+            }
+            if (document.getElementById('sidePanel').contains(event.target) && 
+                document.getElementById('sidePanel').scrollHeight > document.getElementById('sidePanel').clientHeight) {
+                return;
+            }
+
+            event.preventDefault();
+            trackActivity();
+            const zoomSpeed = 0.1;
+            app.cameraDistance *= (1 + event.deltaY * -zoomSpeed * 0.01);
             app.cameraDistance = Math.max(0.5, Math.min(20, app.cameraDistance));
             updateCameraPosition();
         }
@@ -989,220 +2416,166 @@
             app.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             app.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         }
-
-        function moveSelectedAlongAxis(event) {
-            if (!app.movementAxis || app.selectedPieces.size === 0 || !app.dragStartPos || !app.isDraggingPiece) return;
-
-            app.raycaster.setFromCamera(app.mouse, app.camera);
+        
+        function updateTypedMeasurement() {
+            const measurement = app.measurementElement;
+            measurement.classList.add('typing');
             
-            const planeNormal = new THREE.Vector3();
-            app.camera.getWorldDirection(planeNormal); 
-            const dragPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, app.dragStartPos);
+            let value = parseFloat(app.movementState.typedValue) || 0;
+            let text = `${app.movementState.typedValue || '0'}mm`;
             
-            const intersectPoint = new THREE.Vector3();
-            app.raycaster.ray.intersectPlane(dragPlane, intersectPoint);
-
-            if (intersectPoint) {
-                const worldDelta = intersectPoint.clone().sub(app.dragStartPos);
-                
-                let finalMovement = new THREE.Vector3();
-                finalMovement[app.movementAxis] = worldDelta[app.movementAxis];
-
-                if (app.movementAxis === 'z') {
-                    let minRequiredZCorrection = 0; 
-                    let currentLowestProjectedZ = Infinity;
-
-                    app.selectedPieces.forEach(piece => {
-                        const initialPos = app.initialPiecePositions.get(piece);
-                        if (!initialPos) return;
-                        
-                        // For accurate floor collision, we need the piece's bounding box at its *new potential position*
-                        // before floor correction. The piece's origin is its center.
-                        // Its extent along its local Z is piece.geometry.parameters.depth / 2
-                        // We need to transform this local extent to world Z.
-                        
-                        const tempPiece = piece.clone(); // Temporary clone to avoid modifying original during check
-                        tempPiece.position.copy(initialPos).add(finalMovement);
-                        tempPiece.updateMatrixWorld(); // Ensure matrix is up-to-date for bounding box calculation
-
-                        const pieceBox = new THREE.Box3().setFromObject(tempPiece);
-                        const lowestZAfterMove = pieceBox.min.z;
-                        
-                        if (lowestZAfterMove < 0) {
-                            minRequiredZCorrection = Math.max(minRequiredZCorrection, -lowestZAfterMove);
-                        }
-                        currentLowestProjectedZ = Math.min(currentLowestProjectedZ, lowestZAfterMove);
-                    });
-
-                    if (minRequiredZCorrection > 0) {
-                        finalMovement.z += minRequiredZCorrection;
-                        currentLowestProjectedZ += minRequiredZCorrection; 
-                    }
-
-                    const snapToFloorThreshold = 0.01; 
-                    if (Math.abs(currentLowestProjectedZ) < snapToFloorThreshold && currentLowestProjectedZ !== 0) {
-                        finalMovement.z -= currentLowestProjectedZ; 
-                    }
+            if (app.movementState.lengthEditData) {
+                text = `Length: ${text}`;
+                if (app.movementState.lengthEditData.pieces.size > 1) {
+                    text += ` (${app.movementState.lengthEditData.pieces.size} pieces)`;
                 }
-                
-                app.selectedPieces.forEach(piece => {
-                    const initialPos = app.initialPiecePositions.get(piece);
-                    if (initialPos) {
-                        piece.position.copy(initialPos).add(finalMovement);
+            } else if (app.movementState.axis) {
+                text = `${app.movementState.axis.toUpperCase()}: ${text}`;
+            }
+            
+            showMeasurement(text);
+            
+            // Update position
+            const center = new THREE.Vector3();
+            const pieces = app.movementState.lengthEditData ? 
+                app.movementState.lengthEditData.pieces : app.selectedPieces;
+            pieces.forEach(p => center.add(p.position));
+            center.divideScalar(pieces.size);
+            updateMeasurementPosition(center);
+        }
+
+        function applyTypedMeasurement() {
+            const value = parseFloat(app.movementState.typedValue);
+            if (isNaN(value)) return;
+            
+            if (app.movementState.lengthEditData) {
+                // Apply typed length
+                const lengthMM = Math.max(MIN_PIECE_LENGTH * 1000, Math.abs(value));
+                app.movementState.lengthEditData.pieces.forEach(piece => {
+                    const editData = app.movementState.lengthEditData.pieceData.get(piece);
+                    if (editData) {
+                        applyLengthChange(piece, lengthMM, editData);
                     }
                 });
-
-                const movedDistance = Math.abs(finalMovement[app.movementAxis]);
-                if (movedDistance > 0.001) { 
-                    showMeasurement(movedDistance * 1000); 
-                    const selectionCenter = new THREE.Vector3();
-                    app.selectedPieces.forEach(p => selectionCenter.add(p.position));
-                    selectionCenter.divideScalar(app.selectedPieces.size);
-                    updateMeasurementPosition(selectionCenter);
-                }
+            } else if (app.movementState.axis) {
+                // Apply typed movement
+                const movement = new THREE.Vector3();
+                movement[app.movementState.axis] = value / 1000; // Convert mm to meters
+                unifiedMove(app.selectedPieces, movement, 'typed');
             }
-        }
-        
-        function checkSnapForMovement(movement) {
-            const snapThreshold = 0.01; 
-            let minDistance = Infinity;
-            let snapDelta = null;
-            let measurementPos = null;
             
-            return {
-                snapDelta,
-                distance: minDistance === Infinity ? null : minDistance,
-                measurementPos
-            };
+            app.movementState.typedValue = '';
+            app.measurementElement.classList.remove('typing');
         }
         
-        function rotateSelected(axis) {
+        function applyLengthChange(piece, newLengthMM, editData) {
+            const snappedLength = Math.round(newLengthMM / 5) * 5;
+            piece.userData.currentPreviewLength = snappedLength;
+            
+            // Update geometry
+            if (piece.geometry) piece.geometry.dispose();
+            const t = piece.userData.thickness / 1000;
+            const w = piece.userData.width / 1000;
+            const l = snappedLength / 1000;
+            piece.geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
+            
+            // Adjust position based on which face is being edited
+            const lengthChange = snappedLength - editData.originalLength;
+            const shiftDistance = lengthChange / 2000; // Half the change in meters
+            
+            const localShiftAxis = new THREE.Vector3(0, 0, editData.editFace === 'top' ? 1 : -1);
+            const worldShift = localShiftAxis.clone()
+                .multiplyScalar(shiftDistance)
+                .applyQuaternion(editData.originalQuaternion);
+            
+            piece.position.copy(editData.originalPosition).add(worldShift);
+            
+            // Floor constraint
+            const box = new THREE.Box3().setFromObject(piece);
+            if (box.min.z < 0) {
+                piece.position.z += -box.min.z;
+                piece.position.z = snapToGrid(piece.position.z);
+            }
+            
+            showMeasurement(`Length: ${snappedLength}mm`);
+        }
+        
+        function rotateSelected(rotationType) {
             if (app.selectedPieces.size === 0) return;
             
             const center = new THREE.Vector3();
-            app.selectedPieces.forEach(piece => {
-                center.add(piece.position);
-            });
+            app.selectedPieces.forEach(piece => center.add(piece.position));
             center.divideScalar(app.selectedPieces.size);
             
-            const rotation = Math.PI / 2; 
-            const axisVector = new THREE.Vector3();
-            if (axis === 'x') axisVector.set(1, 0, 0);
-            else if (axis === 'y') axisVector.set(0, 1, 0);
-            else if (axis === 'z') axisVector.set(0, 0, 1);
-            else return;
+            const rotationAngle = Math.PI / 2;
 
             app.selectedPieces.forEach(piece => {
-                piece.rotateOnWorldAxis(axisVector, rotation); 
+                // Apply local rotation
+                if (rotationType === 'localX') piece.rotateX(rotationAngle);
+                else if (rotationType === 'localY') piece.rotateY(rotationAngle);
+                else if (rotationType === 'localZ') piece.rotateZ(rotationAngle);
 
+                // If multiple pieces, rotate around group center
                 if (app.selectedPieces.size > 1) {
                     const offset = piece.position.clone().sub(center);
-                    offset.applyAxisAngle(axisVector, rotation);
+                    let worldAxis = new THREE.Vector3();
+                    if (rotationType === 'localX') worldAxis.set(1,0,0);
+                    else if (rotationType === 'localY') worldAxis.set(0,1,0);
+                    else if (rotationType === 'localZ') worldAxis.set(0,0,1);
+                    
+                    offset.applyAxisAngle(worldAxis, rotationAngle);
                     piece.position.copy(center).add(offset);
                 }
-                const pieceBox = new THREE.Box3().setFromObject(piece);
-                if (pieceBox.min.z < 0) {
-                    piece.position.z += -pieceBox.min.z;
+                
+                // Snap to grid and apply floor constraint
+                piece.position.copy(snapVectorToGrid(piece.position));
+                const box = new THREE.Box3().setFromObject(piece);
+                if (box.min.z < 0) {
+                    piece.position.z += -box.min.z;
+                    piece.position.z = snapToGrid(piece.position.z);
                 }
             });
             
+            checkCollisions();
+            
+            // Check for collisions after rotation
+            let hasCollisions = false;
+            app.selectedPieces.forEach(piece => {
+                if (piece.userData.isColliding) hasCollisions = true;
+            });
+            
+            if (hasCollisions) {
+                showStatus("⚠️ Rotation caused collisions! Use Ctrl+Z to undo if needed.", true, 4000);
+            }
+
+            updateVisualHelpers();
             saveState();
             saveCurrentProject();
-            showStatus(`Rotated around ${axis.toUpperCase()} axis`);
-        }
-        
-        function getBoxCorners(box) {
-            return [ /* ... corners ... */ ]; // Placeholder, not currently used by core logic
-        }
-        
-        function updateSnapLines() {
-            clearSnapLines();
-            if (!app.movementAxis || app.selectedPieces.size === 0) return;
-            // Placeholder for snap line visualization
-        }
-        
-        function clearSnapLines() {
-            app.snapLines.forEach(line => app.scene.remove(line));
-            app.snapLines = [];
-        }
-        
-        function adjustLength(event) {
-            if (!app.lengthEditPiece || !app.isLengthEditing) return;
-
-            const piece = app.lengthEditPiece;
-            const originalLengthMM = app.lengthEditOriginalLength;
-            const originalPosition = app.lengthEditOriginalPosition; 
-            const originalQuaternion = app.lengthEditOriginalQuaternion;
-
-            const mouseDeltaMM = (event.clientX - app.lastMouseX) * 10; 
-
-            let lengthChangeDueToMouseMM;
-            if (app.lengthEditFace === 'top') { 
-                lengthChangeDueToMouseMM = mouseDeltaMM;
-            } else { 
-                lengthChangeDueToMouseMM = -mouseDeltaMM; 
-            }
-            
-            let newLengthMM = originalLengthMM + lengthChangeDueToMouseMM;
-            newLengthMM = Math.max(10, newLengthMM); 
-            const snappedNewLengthMM = Math.round(newLengthMM / 10) * 10;
-
-            const actualTotalLengthChangeMM = snappedNewLengthMM - originalLengthMM;
-
-            const t_meters = piece.userData.thickness / 1000;
-            const w_meters = piece.userData.width / 1000;
-            const l_new_meters = snappedNewLengthMM / 1000;
-
-            if (Math.abs(snappedNewLengthMM - piece.userData.length) < 0.1 && piece.geometry.parameters.depth === l_new_meters) {
-                 showMeasurement(`Length: ${piece.userData.length}mm`);
-                 const currentEditedFaceCenterLocal = new THREE.Vector3(0,0, (app.lengthEditFace === 'top' ? 1 : -1) * piece.geometry.parameters.depth/2 );
-                 updateMeasurementPosition(piece.localToWorld(currentEditedFaceCenterLocal.clone()));
-                return;
-            }
-            
-            piece.geometry.dispose();
-            piece.geometry = new THREE.BoxGeometry(t_meters, w_meters, l_new_meters);
-            piece.userData.length = snappedNewLengthMM;
-
-            const shiftDistanceMeters = (actualTotalLengthChangeMM / 2000.0); 
-
-            let localShiftAxis = new THREE.Vector3(0, 0, 0);
-            if (app.lengthEditFace === 'top') {
-                localShiftAxis.set(0, 0, 1); 
-            } else { 
-                localShiftAxis.set(0, 0, -1); 
-            }
-            
-            const worldShiftVector = localShiftAxis.clone()
-                .multiplyScalar(shiftDistanceMeters)
-                .applyQuaternion(originalQuaternion); 
-            
-            piece.position.copy(originalPosition).add(worldShiftVector);
-            
-            const pieceBox = new THREE.Box3().setFromObject(piece);
-            if (pieceBox.min.z < 0) {
-                piece.position.z += -pieceBox.min.z;
-            }
-
-            piece.material.color.setHex(0x8B6F47); 
-
-            showMeasurement(`Length: ${snappedNewLengthMM}mm`);
-            const editedFaceCenterLocal = new THREE.Vector3(0,0, (app.lengthEditFace === 'top' ? 1 : -1) * l_new_meters/2 );
-            updateMeasurementPosition(piece.localToWorld(editedFaceCenterLocal.clone()));
+            updateInfoPanel();
+            updateProjectDetails();
+            showStatus(`Rotated around ${rotationType}`);
         }
 
         function duplicatePiece(original) {
-            const clone = original.clone(); 
-            clone.material = original.material.clone(); 
-            clone.userData = { ...original.userData }; 
+            const clone = original.clone();
+            clone.material = original.material.clone();
             
-            clone.position.add(new THREE.Vector3(0.1, 0.1, 0.1)); 
-            const pieceBox = new THREE.Box3().setFromObject(clone);
-            if (pieceBox.min.z < 0) {
-                clone.position.z += -pieceBox.min.z;
-            }
-
+            // Create new unique ID for the duplicate
+            const pieceId = 'piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            clone.userData = { 
+                ...original.userData, 
+                geometryVersion: 1,
+                id: pieceId
+            };
+            
+            const offset = new THREE.Vector3(0.1, 0.1, 0.1);
+            const preferredPosition = original.position.clone().add(offset);
+            preferredPosition.copy(snapVectorToGrid(preferredPosition));
+            
             app.scene.add(clone);
+            if (!findNonOverlappingPosition(clone, preferredPosition)) {
+                showStatus('Duplicated with offset - no adjacent space', true);
+            }
             
             clearSelection();
             app.selectedPieces.add(clone);
@@ -1211,110 +2584,140 @@
             saveState();
             saveCurrentProject();
             updateHotkeyGuide();
+            updateInfoPanel();
+            updateProjectDetails();
+            checkCollisions();
             showStatus('Duplicated piece');
         }
-        
+
         function deleteSelectedPieces() {
             if (app.selectedPieces.size === 0) return;
-            saveState(); 
             
+            saveState();
             app.selectedPieces.forEach(piece => {
                 app.scene.remove(piece);
                 if (piece.geometry) piece.geometry.dispose();
                 if (piece.material) piece.material.dispose();
+                removeSelectionOutline(piece);
+                removeResizeIndicator(piece);
             });
             
             const count = app.selectedPieces.size;
             app.selectedPieces.clear();
             saveCurrentProject();
             updateHotkeyGuide();
+            updateInfoPanel();
+            updateProjectDetails();
+            checkCollisions();
             showStatus(`Deleted ${count} piece${count > 1 ? 's' : ''}`);
         }
-        
+
         function clearSelection() {
             app.selectedPieces.forEach(piece => updatePieceSelection(piece, false));
             app.selectedPieces.clear();
         }
-        
+
         function updatePieceSelection(piece, selected) {
             if (selected) {
-                piece.material.emissive = new THREE.Color(0xcc3333); 
-                piece.material.emissiveIntensity = 0.3;
+                createSelectionOutline(piece);
             } else {
-                piece.material.emissive = new THREE.Color(0x000000);
-                piece.material.emissiveIntensity = 0;
+                piece.material.color.setHex(0xB8956F);
+                removeSelectionOutline(piece);
+            }
+            
+            // Reapply collision color if needed
+            if (piece.userData.isColliding) {
+                piece.material.color.setHex(0xff4444);
             }
         }
         
         function showMeasurement(text) {
             const measurement = app.measurementElement;
-            measurement.textContent = typeof text === 'number' ? `${Math.round(text)}mm` : text;
+            measurement.textContent = text;
             measurement.classList.remove('hidden');
-            
             clearTimeout(app.measurementTimeout);
-            app.measurementTimeout = setTimeout(() => {
-                measurement.classList.add('hidden');
-            }, 2000);
+            app.measurementTimeout = setTimeout(() => measurement.classList.add('hidden'), 3000);
         }
-        
+
         function hideMeasurement() {
             app.measurementElement.classList.add('hidden');
             clearTimeout(app.measurementTimeout);
         }
-        
+
         function updateMeasurementPosition(worldPosition) {
             if (!worldPosition) return;
-            
             const screenPosition = worldPosition.clone().project(app.camera);
             const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
             const y = (-screenPosition.y * 0.5 + 0.5) * window.innerHeight;
-            
             app.measurementElement.style.left = `${x}px`;
             app.measurementElement.style.top = `${y}px`;
-            app.measurementElement.style.transform = 'translate(-50%, -150%)'; 
+            app.measurementElement.style.transform = 'translate(-50%, -150%)';
         }
         
         function updateHotkeyGuide() {
-            const movementGuide = document.getElementById('movementGuide');
-            const selectedGuide = document.getElementById('selectedGuide');
-            
-            movementGuide.style.display = app.movementAxis ? 'block' : 'none';
-            selectedGuide.style.display = !app.movementAxis && app.selectedPieces.size > 0 ? 'block' : 'none';
+            document.getElementById('movementGuide').style.display = app.movementState.active ? 'block' : 'none';
+            document.getElementById('selectedGuide').style.display = 
+                !app.movementState.active && !app.movementState.lengthEditData && app.selectedPieces.size > 0 ? 'block' : 'none';
+            document.getElementById('lengthEditGuide').style.display = app.movementState.lengthEditData ? 'block' : 'none';
         }
         
         function loadProjects() {
-            const saved = localStorage.getItem('woodProjects');
-            if (saved) {
-                app.projects = JSON.parse(saved);
-            } else {
+            try {
+                const saved = localStorage.getItem('woodProjects');
+                app.projects = saved ? JSON.parse(saved) : { 'Project 1': { pieces: [] } };
+            } catch (e) {
+                console.error('Failed to parse projects:', e);
                 app.projects = { 'Project 1': { pieces: [] } };
             }
+            
+            if (Object.keys(app.projects).length === 0) {
+                app.projects = { 'Project 1': { pieces: [] } };
+            }
+            
             const projectNames = Object.keys(app.projects);
-            if (projectNames.length > 0) {
+            if (projectNames.length > 0 && !app.currentProject) {
                 loadProject(projectNames[0]);
             }
-            updateProjectList();
+            
+            app.gui.updateProjectList();
         }
-        
+
         function saveCurrentProject() {
             if (!app.currentProject) return;
-            const pieces = [];
-            app.scene.traverse((obj) => {
-                if (obj.userData.isWoodPiece) {
-                    pieces.push({
-                        thickness: obj.userData.thickness,
-                        width: obj.userData.width,
-                        length: obj.userData.length,
-                        position: obj.position.toArray(),
-                        rotation: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w] 
-                    });
-                }
-            });
-            app.projects[app.currentProject] = { pieces };
-            localStorage.setItem('woodProjects', JSON.stringify(app.projects));
+            
+            try {
+                const pieces = [];
+                app.scene.traverse((obj) => {
+                    if (obj.userData.isWoodPiece) {
+                        pieces.push({
+                            thickness: obj.userData.thickness,
+                            width: obj.userData.width,
+                            length: obj.userData.length,
+                            position: obj.position.toArray(),
+                            rotation: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w],
+                            id: obj.userData.id
+                        });
+                    }
+                });
+                app.projects[app.currentProject] = { pieces };
+                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
+            } catch (e) {
+                console.error('Failed to save project:', e);
+            }
         }
-        
+
         function loadProject(name) {
+            if (!app.projects[name]) {
+                console.error('Project not found:', name);
+                return;
+            }
+            
+            if (app.currentProject) saveCurrentProject();
+            
+            clearSelection();
+            app.selectionOutlines.forEach(removeSelectionOutline);
+            app.resizeIndicators.forEach(removeResizeIndicator);
+            
             const toRemove = [];
             app.scene.traverse((obj) => {
                 if (obj.userData.isWoodPiece) toRemove.push(obj);
@@ -1324,7 +2727,6 @@
                 if (obj.geometry) obj.geometry.dispose();
                 if (obj.material) obj.material.dispose();
             });
-            clearSelection();
             
             const project = app.projects[name];
             if (project && project.pieces) {
@@ -1332,89 +2734,371 @@
                     const t = data.thickness / 1000;
                     const w = data.width / 1000;
                     const l = data.length / 1000;
-                    const geometry = new THREE.BoxGeometry(t, w, l);
-                    if (geometry.boundingBox === null) geometry.computeBoundingBox();
+                    const geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
                     const material = new THREE.MeshStandardMaterial({
-                        color: 0x8B6F47, roughness: 0.7, metalness: 0.1
+                        color: 0xB8956F,
+                        roughness: 0.6,
+                        metalness: 0.05
                     });
                     const piece = new THREE.Mesh(geometry, material);
                     piece.castShadow = true;
                     piece.receiveShadow = true;
+                    
+                    // Ensure each loaded piece has a unique ID
+                    const pieceId = data.id || ('piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
                     piece.userData = {
-                        thickness: data.thickness, width: data.width, length: data.length, isWoodPiece: true
+                        thickness: data.thickness,
+                        width: data.width,
+                        length: data.length,
+                        isWoodPiece: true,
+                        geometryVersion: 1,
+                        id: pieceId
                     };
                     piece.position.fromArray(data.position);
-                    piece.quaternion.fromArray(data.rotation); 
+                    piece.quaternion.fromArray(data.rotation);
                     app.scene.add(piece);
                 });
             }
+            
             app.currentProject = name;
-            updateProjectList();
+            app.gui.updateProjectList();
             showStatus(`Loaded ${name}`);
-            app.undoStack = []; 
+            app.undoStack = [];
             app.redoStack = [];
-            saveState(); 
+            saveState();
+            checkCollisions();
+            updateInfoPanel();
+            updateProjectDetails();
         }
-        
-        function updateProjectList() {
+
+        // Project GUI Management
+        app.gui.currentNewProjectInput = null;
+        app.gui.currentEditProjectInput = null;
+        app.gui.originalEditName = null;
+
+        app.gui.promptNewProject = function() {
+            if (app.isAddingProject || app.editingProjectName) {
+                app.gui.cancelActiveInput();
+            }
+            app.isAddingProject = true;
+
             const projectList = document.getElementById('projectList');
+            const tempItem = document.createElement('div');
+            tempItem.className = 'project-item new-project-input-item';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'New Project Name...';
+            input.className = 'new-project-name-input';
+            
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'confirm-new-project';
+            confirmBtn.innerHTML = '<i class="fas fa-check"></i>';
+            confirmBtn.title = "Confirm";
+            confirmBtn.onclick = () => app.gui.confirmNewProject();
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'cancel-new-project';
+            cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+            cancelBtn.title = "Cancel";
+            cancelBtn.onclick = () => app.gui.cancelNewProject();
+
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') app.gui.confirmNewProject();
+                if (e.key === 'Escape') app.gui.cancelNewProject();
+            };
+            
+            tempItem.appendChild(input);
+            tempItem.appendChild(confirmBtn);
+            tempItem.appendChild(cancelBtn);
+            
+            projectList.prepend(tempItem);
+            input.focus();
+            app.gui.currentNewProjectInput = tempItem;
+        };
+
+        app.gui.confirmNewProject = function() {
+            if (!app.gui.currentNewProjectInput) return;
+            const input = app.gui.currentNewProjectInput.querySelector('.new-project-name-input');
+            const newName = input.value.trim();
+
+            if (!newName) {
+                showStatus("Project name cannot be empty.", true);
+                input.focus();
+                return;
+            }
+            if (app.projects[newName]) {
+                showStatus("A project with this name already exists.", true);
+                input.focus();
+                return;
+            }
+
+            app.projects[newName] = { pieces: [] };
+            if (app.currentProject) saveCurrentProject();
+            loadProject(newName);
+            app.gui.cancelNewProject();
+            closeMenu();
+        };
+
+        app.gui.cancelNewProject = function() {
+            if (app.gui.currentNewProjectInput) {
+                app.gui.currentNewProjectInput.remove();
+                app.gui.currentNewProjectInput = null;
+            }
+            app.isAddingProject = false;
+        };
+        
+        app.gui.promptRenameProject = function(projectName, projectItemElement) {
+            if (app.isAddingProject || app.editingProjectName) {
+                app.gui.cancelActiveInput();
+            }
+            app.editingProjectName = projectName;
+            app.gui.originalEditName = projectName;
+
+            const nameSpan = projectItemElement.querySelector('.project-name');
+            const actionsDiv = projectItemElement.querySelector('.project-actions');
+            const deleteConfirmDiv = projectItemElement.querySelector('.project-delete-confirm');
+
+            nameSpan.style.display = 'none';
+            if(actionsDiv) actionsDiv.style.display = 'none';
+            if(deleteConfirmDiv) deleteConfirmDiv.classList.remove('visible');
+
+            let editForm = projectItemElement.querySelector('.project-edit-form');
+            if (!editForm) {
+                editForm = document.createElement('div');
+                editForm.className = 'project-edit-form';
+                projectItemElement.insertBefore(editForm, nameSpan.nextSibling);
+            }
+            
+            editForm.innerHTML = `
+                <input type="text" class="edit-project-name-input" value="${projectName}" style="width: calc(100% - 70px); margin-right: 5px;">
+                <button class="confirm-edit-project" title="Confirm"><i class="fas fa-check"></i></button>
+                <button class="cancel-edit-project" title="Cancel"><i class="fas fa-times"></i></button>
+            `;
+            editForm.style.display = 'flex';
+            
+            const input = editForm.querySelector('.edit-project-name-input');
+            input.focus();
+            input.select();
+
+            editForm.querySelector('.confirm-edit-project').onclick = () => app.gui.confirmRenameProject(projectName, input.value);
+            editForm.querySelector('.cancel-edit-project').onclick = () => app.gui.cancelRenameProject(projectName);
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') app.gui.confirmRenameProject(projectName, input.value);
+                if (e.key === 'Escape') app.gui.cancelRenameProject(projectName);
+            };
+            app.gui.currentEditProjectInput = projectItemElement;
+        };
+
+        app.gui.confirmRenameProject = function(oldName, newNameRaw) {
+            const newName = newNameRaw.trim();
+            if (!newName) {
+                showStatus("Project name cannot be empty.", true);
+                const inputField = app.gui.currentEditProjectInput.querySelector('.edit-project-name-input');
+                if(inputField) inputField.focus();
+                return;
+            }
+            if (newName !== oldName && app.projects[newName]) {
+                showStatus("A project with this name already exists.", true);
+                const inputField = app.gui.currentEditProjectInput.querySelector('.edit-project-name-input');
+                if(inputField) inputField.focus();
+                return;
+            }
+
+            if (newName !== oldName) {
+                app.projects[newName] = app.projects[oldName];
+                delete app.projects[oldName];
+                if (app.currentProject === oldName) {
+                    app.currentProject = newName;
+                }
+                saveCurrentProject();
+                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
+            }
+            app.gui.cancelRenameProject(newName);
+            app.gui.updateProjectList();
+            showStatus(`Project renamed to ${newName}`);
+        };
+
+        app.gui.cancelRenameProject = function(projectNameToListUpdate) {
+            if (app.gui.currentEditProjectInput) {
+                const itemElement = app.gui.currentEditProjectInput;
+                const nameSpan = itemElement.querySelector('.project-name');
+                const actionsDiv = itemElement.querySelector('.project-actions');
+                const editForm = itemElement.querySelector('.project-edit-form');
+
+                if (nameSpan) nameSpan.style.display = 'block';
+                if (actionsDiv) actionsDiv.style.display = 'flex';
+                if (editForm) editForm.style.display = 'none';
+            }
+            app.editingProjectName = null;
+            app.gui.originalEditName = null;
+            app.gui.currentEditProjectInput = null;
+        };
+        
+        app.gui.cancelActiveInput = function() {
+            if (app.isAddingProject) {
+                app.gui.cancelNewProject();
+            }
+            if (app.editingProjectName && app.gui.currentEditProjectInput) {
+                const nameToRestore = app.gui.originalEditName || app.editingProjectName;
+                const itemElement = app.gui.currentEditProjectInput;
+                const nameSpan = itemElement.querySelector('.project-name');
+                const actionsDiv = itemElement.querySelector('.project-actions');
+                const editForm = itemElement.querySelector('.project-edit-form');
+
+                if (nameSpan) {
+                    nameSpan.textContent = nameToRestore;
+                    nameSpan.style.display = 'block';
+                }
+                if (actionsDiv) actionsDiv.style.display = 'flex';
+                if (editForm) editForm.style.display = 'none';
+
+                app.editingProjectName = null;
+                app.gui.originalEditName = null;
+                app.gui.currentEditProjectInput = null;
+            }
+        };
+
+        app.gui.updateProjectList = function() {
+            const projectList = document.getElementById('projectList');
+            let newProjectInputRow = projectList.querySelector('.new-project-input-item');
             projectList.innerHTML = '';
+            if (newProjectInputRow) {
+                projectList.prepend(newProjectInputRow);
+            }
+
             Object.keys(app.projects).forEach(name => {
                 const item = document.createElement('div');
                 item.className = 'project-item';
+                item.dataset.projectName = name;
                 if (name === app.currentProject) item.classList.add('active');
+                
                 const nameSpan = document.createElement('span');
+                nameSpan.className = 'project-name';
                 nameSpan.textContent = name;
-                nameSpan.style.cursor = 'pointer';
-                nameSpan.onclick = () => { loadProject(name); closeMenu(); };
+                nameSpan.onclick = (e) => {
+                    e.stopPropagation();
+                    if (name !== app.currentProject) {
+                        app.gui.cancelActiveInput();
+                        loadProject(name);
+                        closeMenu();
+                    }
+                };
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'project-actions';
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'edit-project-btn';
+                editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+                editBtn.title = "Edit Name";
+                editBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    app.gui.promptRenameProject(name, item);
+                };
+
                 const deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'Delete';
-                deleteBtn.onclick = (e) => { e.stopPropagation(); deleteProject(name); };
+                deleteBtn.className = 'delete-project-btn';
+                deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+                deleteBtn.title = "Delete Project";
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    toggleDeleteConfirmation(name, item);
+                };
+                
+                actionsDiv.appendChild(editBtn);
+                actionsDiv.appendChild(deleteBtn);
+
                 item.appendChild(nameSpan);
-                item.appendChild(deleteBtn);
+                item.appendChild(actionsDiv);
+
+                const confirmDiv = document.createElement('div');
+                confirmDiv.className = 'project-delete-confirm';
+                confirmDiv.innerHTML = `
+                    <span>Delete '${name}'?</span>
+                    <button class="confirm-yes" title="Confirm Delete"><i class="fas fa-check"></i></button>
+                    <button class="confirm-no" title="Cancel"><i class="fas fa-times"></i></button>
+                `;
+                confirmDiv.querySelector('.confirm-yes').onclick = (e) => {
+                    e.stopPropagation();
+                    actuallyDeleteProject(name);
+                };
+                confirmDiv.querySelector('.confirm-no').onclick = (e) => {
+                    e.stopPropagation();
+                    confirmDiv.classList.remove('visible');
+                };
+                item.appendChild(confirmDiv);
+
+                const editFormDiv = document.createElement('div');
+                editFormDiv.className = 'project-edit-form';
+                editFormDiv.style.display = 'none';
+                item.appendChild(editFormDiv);
+
                 projectList.appendChild(item);
             });
-        }
+        };
         
-        app.createNewProject = function() { 
-            const name = prompt('Project name:', `Project ${Object.keys(app.projects).length + 1}`);
-            if (name && !app.projects[name]) {
-                app.projects[name] = { pieces: [] };
-                loadProject(name); 
-            } else if (name && app.projects[name]) {
-                alert("A project with this name already exists.");
-            }
-        }
-        
-        app.renameProject = function() { 
-            if (!app.currentProject) return;
-            const newName = prompt('New name:', app.currentProject);
-            if (newName && newName !== app.currentProject && !app.projects[newName]) {
-                app.projects[newName] = app.projects[app.currentProject];
-                delete app.projects[app.currentProject];
-                app.currentProject = newName;
-                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
-                updateProjectList();
-                showStatus(`Renamed to ${newName}`);
-            } else if (newName && app.projects[newName] && newName !== app.currentProject) {
-                 alert("A project with this name already exists.");
-            }
-        }
-        
-        function deleteProject(name) {
-            if (Object.keys(app.projects).length <= 1) {
-                alert('Cannot delete the last project'); return;
-            }
-            if (confirm(`Delete project "${name}"? This cannot be undone.`)) {
-                delete app.projects[name];
-                if (name === app.currentProject) {
-                    const remaining = Object.keys(app.projects);
-                    loadProject(remaining[0]); 
+        function toggleDeleteConfirmation(projectName, projectItemElement) {
+            document.querySelectorAll('.project-delete-confirm.visible').forEach(openConfirm => {
+                if (openConfirm.parentElement !== projectItemElement) {
+                    openConfirm.classList.remove('visible');
                 }
-                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
-                updateProjectList();
-                showStatus(`Deleted project ${name}`);
+            });
+            const confirmDiv = projectItemElement.querySelector('.project-delete-confirm');
+            if (confirmDiv) {
+                confirmDiv.classList.toggle('visible');
             }
+        }
+
+        function actuallyDeleteProject(name) {
+            if (Object.keys(app.projects).length <= 1) {
+                showStatus('Cannot delete the last project', true, 3000);
+                const itemElement = document.querySelector(`.project-item[data-project-name="${name}"] .project-delete-confirm`);
+                if(itemElement) itemElement.classList.remove('visible');
+                return;
+            }
+            
+            // Close any delete confirmations first
+            document.querySelectorAll('.project-delete-confirm.visible').forEach(confirm => {
+                confirm.classList.remove('visible');
+            });
+            
+            delete app.projects[name];
+            
+            if (name === app.currentProject) {
+                const remaining = Object.keys(app.projects);
+                if (remaining.length > 0) {
+                    loadProject(remaining[0]);
+                } else {
+                    app.currentProject = null;
+                    const toRemove = [];
+                    app.scene.traverse((obj) => {
+                        if (obj.userData.isWoodPiece) toRemove.push(obj);
+                    });
+                    toRemove.forEach(obj => {
+                        app.scene.remove(obj);
+                        if (obj.geometry) obj.geometry.dispose();
+                        if (obj.material) obj.material.dispose();
+                    });
+                    clearSelection();
+                    checkCollisions();
+                    updateInfoPanel();
+                    updateProjectDetails();
+                }
+            }
+            
+            try {
+                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
+            } catch (e) {
+                console.error('Failed to save projects:', e);
+            }
+            
+            // Force update the project list
+            setTimeout(() => {
+                app.gui.updateProjectList();
+            }, 10);
+            
+            showStatus(`Deleted project '${name}'`);
         }
         
         function saveState() {
@@ -1422,9 +3106,13 @@
             app.scene.traverse((obj) => {
                 if (obj.userData.isWoodPiece) {
                     state.push({
-                        thickness: obj.userData.thickness, width: obj.userData.width, length: obj.userData.length,
+                        thickness: obj.userData.thickness,
+                        width: obj.userData.width,
+                        length: obj.userData.length,
                         position: obj.position.toArray(),
-                        rotation: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w]
+                        rotation: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w],
+                        geometryVersion: obj.userData.geometryVersion,
+                        id: obj.userData.id
                     });
                 }
             });
@@ -1432,60 +3120,349 @@
             app.redoStack = [];
             if (app.undoStack.length > 50) app.undoStack.shift();
         }
-        
-        function undo() {
-            if (app.undoStack.length <= 1) { 
-                 showStatus('Nothing to undo'); return;
-            }
-            const currentStateJson = JSON.stringify(app.undoStack.pop()); 
-            app.redoStack.push(JSON.parse(currentStateJson)); 
 
-            const previousState = JSON.parse(JSON.stringify(app.undoStack[app.undoStack.length - 1])); 
+        function undo() {
+            if (app.undoStack.length <= 1) {
+                showStatus('Nothing to undo');
+                return;
+            }
+            const currentStateJson = JSON.stringify(app.undoStack.pop());
+            app.redoStack.push(JSON.parse(currentStateJson));
+            const previousState = JSON.parse(JSON.stringify(app.undoStack[app.undoStack.length - 1]));
             restoreState(previousState);
             showStatus('Undo');
         }
-        
+
         function redo() {
-            if (app.redoStack.length === 0) { showStatus('Nothing to redo'); return; }
+            if (app.redoStack.length === 0) {
+                showStatus('Nothing to redo');
+                return;
+            }
             const nextState = app.redoStack.pop();
-            app.undoStack.push(nextState); 
-            restoreState(JSON.parse(JSON.stringify(nextState))); 
+            app.undoStack.push(nextState);
+            restoreState(JSON.parse(JSON.stringify(nextState)));
             showStatus('Redo');
         }
-        
+
         function restoreState(state) {
+            app.selectionOutlines.forEach(removeSelectionOutline);
+            app.resizeIndicators.forEach(removeResizeIndicator);
+            
             const toRemove = [];
-            app.scene.traverse((obj) => { if (obj.userData.isWoodPiece) toRemove.push(obj); });
+            app.scene.traverse((obj) => {
+                if (obj.userData.isWoodPiece) toRemove.push(obj);
+            });
             toRemove.forEach(obj => {
                 app.scene.remove(obj);
                 if (obj.geometry) obj.geometry.dispose();
                 if (obj.material) obj.material.dispose();
             });
+            
             clearSelection();
             
             state.forEach(data => {
-                const t = data.thickness / 1000; const w = data.width / 1000; const l = data.length / 1000;
-                const geometry = new THREE.BoxGeometry(t, w, l);
-                if (geometry.boundingBox === null) geometry.computeBoundingBox();
-                const material = new THREE.MeshStandardMaterial({ color: 0x8B6F47, roughness: 0.7, metalness: 0.1 });
+                const t = data.thickness / 1000;
+                const w = data.width / 1000;
+                const l = data.length / 1000;
+                const geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0xB8956F,
+                    roughness: 0.6,
+                    metalness: 0.05
+                });
                 const piece = new THREE.Mesh(geometry, material);
-                piece.castShadow = true; piece.receiveShadow = true;
-                piece.userData = { thickness: data.thickness, width: data.width, length: data.length, isWoodPiece: true };
+                piece.castShadow = true;
+                piece.receiveShadow = true;
+                
+                // Ensure restored pieces have unique IDs
+                const pieceId = data.id || ('piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+                piece.userData = {
+                    thickness: data.thickness,
+                    width: data.width,
+                    length: data.length,
+                    isWoodPiece: true,
+                    geometryVersion: data.geometryVersion || 1,
+                    id: pieceId
+                };
                 piece.position.fromArray(data.position);
                 piece.quaternion.fromArray(data.rotation);
                 app.scene.add(piece);
             });
-            saveCurrentProject(); 
+            
+            saveCurrentProject();
             updateHotkeyGuide();
+            updateInfoPanel();
+            updateProjectDetails();
+            checkCollisions();
         }
         
+        function updateGuideLines() {
+            clearGuideLines();
+            if (!app.movementState.axis || app.selectedPieces.size === 0) return;
+            
+            const center = new THREE.Vector3();
+            app.selectedPieces.forEach(piece => {
+                center.add(piece.position);
+            });
+            center.divideScalar(app.selectedPieces.size);
+            
+            const lineMaterial = new THREE.LineDashedMaterial({
+                color: 0x4fc3f7,
+                linewidth: 1,
+                scale: 1,
+                dashSize: 0.1,
+                gapSize: 0.05
+            });
+            
+            const lineLength = 5;
+            const points = [];
+            
+            const posDirection = new THREE.Vector3();
+            posDirection[app.movementState.axis] = lineLength;
+            points.push(center.clone());
+            points.push(center.clone().add(posDirection));
+            
+            const negDirection = new THREE.Vector3();
+            negDirection[app.movementState.axis] = -lineLength;
+            points.push(center.clone());
+            points.push(center.clone().add(negDirection));
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const guideLine = new THREE.LineSegments(geometry, lineMaterial);
+            guideLine.computeLineDistances();
+            guideLine.userData.isGuideLine = true;
+            
+            app.scene.add(guideLine);
+            app.guideLines.push(guideLine);
+            
+            if (app.movementState.axis === 'z') {
+                let lowestZ = Infinity;
+                app.selectedPieces.forEach(piece => {
+                    const box = new THREE.Box3().setFromObject(piece);
+                    lowestZ = Math.min(lowestZ, box.min.z);
+                });
+                
+                if (lowestZ > 0.005) {
+                    const floorLineMaterial = new THREE.LineDashedMaterial({
+                        color: 0xffaa00,
+                        linewidth: 1,
+                        scale: 1,
+                        dashSize: 0.05,
+                        gapSize: 0.03
+                    });
+                    const floorPoints = [
+                        new THREE.Vector3(center.x, center.y, lowestZ),
+                        new THREE.Vector3(center.x, center.y, 0)
+                    ];
+                    const floorGeometry = new THREE.BufferGeometry().setFromPoints(floorPoints);
+                    const floorLine = new THREE.LineSegments(floorGeometry, floorLineMaterial);
+                    floorLine.computeLineDistances();
+                    floorLine.userData.isGuideLine = true;
+                    app.scene.add(floorLine);
+                    app.guideLines.push(floorLine);
+                    
+                    if (!app.movementState.isDragging && app.movementState.typedValue === '') {
+                        showMeasurement(`Floor: ${Math.round(lowestZ * 1000)}mm`);
+                        updateMeasurementPosition(new THREE.Vector3(center.x, center.y, lowestZ / 2));
+                    }
+                } else if (!app.movementState.isDragging && app.movementState.typedValue === '') {
+                    showMeasurement(`On floor`);
+                    updateMeasurementPosition(center);
+                }
+            }
+        }
+
+        function clearGuideLines() {
+            app.guideLines.forEach(line => {
+                app.scene.remove(line);
+                if (line.geometry) line.geometry.dispose();
+                if (line.material) line.material.dispose();
+            });
+            app.guideLines = [];
+        }
+
+        function handleDocumentClickForInputs(event) {
+            // This part is for handling clicks outside of project name input fields
+            if (app.isAddingProject && app.gui.currentNewProjectInput) {
+                // Check if the click is outside the input item AND not on the add button itself
+                if (!app.gui.currentNewProjectInput.contains(event.target) && 
+                    !event.target.closest('.add-project-btn')) {
+                    app.gui.cancelNewProject();
+                }
+            }
+            if (app.editingProjectName && app.gui.currentEditProjectInput) {
+                // Check if the click is outside the edit form AND not on an edit button within a project item
+                const projectItem = event.target.closest('.project-item');
+                let isEditButtonForThisItem = false;
+                if (projectItem && app.gui.currentEditProjectInput === projectItem) {
+                    if (event.target.closest('.edit-project-btn')) {
+                        isEditButtonForThisItem = true;
+                    }
+                }
+                if (!app.gui.currentEditProjectInput.contains(event.target) && !isEditButtonForThisItem) {
+                    app.gui.cancelRenameProject(app.gui.originalEditName);
+                }
+            }
+        }
+
         function animate() {
             requestAnimationFrame(animate);
             app.renderer.render(app.scene, app.camera);
         }
         
+        // Debug function to help identify collision detection issues
+        function debugCollisionDetection() {
+            const pieces = Array.from(app.scene.children.filter(obj => obj.userData.isWoodPiece));
+            console.log(`=== Collision Detection Debug ===`);
+            console.log(`Total pieces in scene: ${pieces.length}`);
+            
+            pieces.forEach((piece, index) => {
+                console.log(`Piece ${index}: ID=${piece.userData.id}, thickness=${piece.userData.thickness}, width=${piece.userData.width}, length=${piece.userData.length}, isColliding=${piece.userData.isColliding}`);
+            });
+            
+            let collisionChecks = 0;
+            let collisionsFound = 0;
+            
+            for (let i = 0; i < pieces.length; i++) {
+                for (let j = i + 1; j < pieces.length; j++) {
+                    const piece1 = pieces[i];
+                    const piece2 = pieces[j];
+                    collisionChecks++;
+                    
+                    if (piece1 === piece2) {
+                        console.error(`SELF COLLISION DETECTED: Piece ${i} checked against itself!`);
+                        continue;
+                    }
+                    
+                    const box1 = new THREE.Box3().setFromObject(piece1);
+                    const box2 = new THREE.Box3().setFromObject(piece2);
+                    box1.expandByScalar(-GEOMETRY_PADDING);
+                    box2.expandByScalar(-GEOMETRY_PADDING);
+                    
+                    if (boxesOverlap(box1, box2, COLLISION_TOLERANCE)) {
+                        collisionsFound++;
+                        console.log(`Collision between piece ${i} (ID: ${piece1.userData.id}) and piece ${j} (ID: ${piece2.userData.id})`);
+                    }
+                }
+            }
+            
+            console.log(`Total collision checks performed: ${collisionChecks}`);
+            console.log(`Total collisions found: ${collisionsFound}`);
+            console.log(`Expected collision checks: ${(pieces.length * (pieces.length - 1)) / 2}`);
+            console.log(`=== End Debug ===`);
+        }
+        
+        // Function to enable movement collision debugging
+        function enableMovementDebug() {
+            // Monkey patch the CollisionConstraint to enable debugging
+            const originalApply = CollisionConstraint.prototype.apply;
+            CollisionConstraint.prototype.apply = function(pieces, movement, startPositions) {
+                // Only check collisions if there's meaningful movement
+                if (movement.lengthSq() < 0.000001) return movement;
+                
+                console.log(`=== Movement Collision Debug ===`);
+                console.log(`Moving pieces count: ${pieces.size}`);
+                console.log(`Movement vector:`, movement);
+                
+                // Get all pieces that are NOT currently being moved
+                const allPieces = app.scene.children.filter(obj => obj.userData.isWoodPiece);
+                const staticPieces = allPieces.filter(obj => !pieces.has(obj));
+                
+                console.log(`Total pieces in scene: ${allPieces.length}`);
+                console.log(`Static pieces count: ${staticPieces.length}`);
+                console.log(`Moving piece IDs:`, Array.from(pieces).map(p => p.userData.id));
+                console.log(`Static piece IDs:`, staticPieces.map(p => p.userData.id));
+                
+                // Create test boxes for moving pieces at their new positions
+                const testBoxes = [];
+                pieces.forEach(piece => {
+                    const startPos = startPositions.get(piece);
+                    if (!startPos) {
+                        console.log(`No start position found for piece ${piece.userData.id}`);
+                        return;
+                    }
+                    
+                    const newPos = startPos.clone().add(movement);
+                    const tempPiece = piece.clone();
+                    tempPiece.position.copy(newPos);
+                    tempPiece.updateMatrixWorld(true);
+                    
+                    const box = new THREE.Box3().setFromObject(tempPiece);
+                    // Adjust for geometry padding
+                    box.expandByScalar(-GEOMETRY_PADDING);
+                    testBoxes.push({ box, piece, originalPiece: piece });
+                });
+                
+                console.log(`Test boxes created: ${testBoxes.length}`);
+                
+                // Check for collisions
+                for (let i = 0; i < testBoxes.length; i++) {
+                    const { box: movingBox, piece: movingPiece, originalPiece } = testBoxes[i];
+                    
+                    // Check against static pieces (pieces not being moved)
+                    for (const staticPiece of staticPieces) {
+                        // Explicit check to ensure we're not comparing a piece to itself
+                        if (originalPiece === staticPiece) {
+                            console.error(`Movement collision: Attempted self-collision check between piece ${originalPiece.userData.id} and itself!`);
+                            continue;
+                        }
+                        
+                        // Double check that the static piece is not in the moving pieces set
+                        if (pieces.has(staticPiece)) {
+                            console.error(`Movement collision: Static piece ${staticPiece.userData.id} is also in moving pieces set!`);
+                            continue;
+                        }
+                        
+                        const staticBox = new THREE.Box3().setFromObject(staticPiece);
+                        staticBox.expandByScalar(-GEOMETRY_PADDING);
+                        
+                        if (boxesOverlap(movingBox, staticBox, COLLISION_TOLERANCE)) {
+                            console.log(`Collision detected between moving piece ${originalPiece.userData.id} and static piece ${staticPiece.userData.id}`);
+                            console.log(`=== Movement Blocked ===`);
+                            return new THREE.Vector3(); // No movement allowed
+                        }
+                    }
+                    
+                    // Check against other moving pieces (but not the same piece)
+                    for (let j = i + 1; j < testBoxes.length; j++) {
+                        const { box: otherMovingBox, piece: otherMovingPiece, originalPiece: otherOriginalPiece } = testBoxes[j];
+                        
+                        // Explicit check to ensure we're not comparing a piece to itself
+                        if (originalPiece === otherOriginalPiece) {
+                            console.error(`Movement collision: Attempted self-collision check between moving pieces ${originalPiece.userData.id} and itself!`);
+                            continue;
+                        }
+                        
+                        if (boxesOverlap(movingBox, otherMovingBox, COLLISION_TOLERANCE)) {
+                            console.log(`Collision detected between moving pieces ${originalPiece.userData.id} and ${otherOriginalPiece.userData.id}`);
+                            console.log(`=== Movement Blocked ===`);
+                            return new THREE.Vector3(); // No movement allowed
+                        }
+                    }
+                }
+                
+                console.log(`No collisions detected, movement allowed`);
+                console.log(`=== End Movement Collision Debug ===`);
+                return movement;
+            };
+            console.log("Movement collision debugging enabled. Try moving a piece now.");
+        }
+        
+        // Function to disable movement collision debugging
+        function disableMovementDebug() {
+            // Restore original CollisionConstraint
+            delete CollisionConstraint.prototype.apply;
+            console.log("Movement collision debugging disabled.");
+        }
+        
+        // Add debug functions to global scope for console access
+        window.debugCollisions = debugCollisionDetection;
+        window.enableMovementDebug = enableMovementDebug;
+        window.disableMovementDebug = disableMovementDebug;
+        window.toggleSettingsSection = toggleSettingsSection;
+        
         window.addEventListener('load', init);
-        window.app = app; 
+        window.app = app;
     </script>
 </body>
 </html>
