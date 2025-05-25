@@ -6,724 +6,123 @@
     <title>3D Wood Construction (Refactored)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            overflow: hidden;
-            user-select: none;
-            background: #1a1a1a;
-        }
-        
-        #canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            cursor: grab;
-        }
-        
-        #canvas.grabbing {
-            cursor: grabbing;
-        }
-        
-        /* Hamburger Menu Button */
-        .menu-button {
-            position: fixed;
-            left: 20px;
-            top: 20px;
-            width: 40px;
-            height: 40px;
-            background: rgba(40, 40, 40, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 4px;
-            z-index: 1001;
-            transition: all 0.2s;
-        }
-        
-        .menu-button:hover {
-            background: rgba(60, 60, 60, 0.9);
-        }
-        
-        .menu-button span {
-            width: 24px;
-            height: 2px;
-            background: #fff;
-            transition: all 0.3s;
-        }
-        
-        .menu-button.active span:nth-child(1) {
-            transform: rotate(45deg) translate(5px, 5px);
-        }
-        
-        .menu-button.active span:nth-child(2) {
-            opacity: 0;
-        }
-        
-        .menu-button.active span:nth-child(3) {
-            transform: rotate(-45deg) translate(5px, -5px);
-        }
-        
-        /* Side Panel */
-        .side-panel {
-            position: fixed;
-            left: -350px;
-            top: 0;
-            background: rgba(40, 40, 40, 0.95);
-            height: 100vh;
-            width: 330px;
-            padding: 80px 20px 20px;
-            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
-            overflow-y: auto;
-            transition: left 0.3s ease;
-            z-index: 1000;
-        }
-        
-        .side-panel.active {
-            left: 0;
-        }
-        
-        .panel-section {
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .panel-section:last-child {
-            border-bottom: none;
-        }
-        
-        .panel-section h3 {
-            font-size: 14px;
-            margin-bottom: 15px;
-            color: #fff;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-         .panel-section h3 .add-project-btn {
-            background: none;
-            border: none;
-            color: #4fc3f7;
-            font-size: 16px;
-            cursor: pointer;
-            padding: 0 5px;
-        }
-        .panel-section h3 .add-project-btn:hover {
-            color: #fff;
-        }
-        
-        /* Material Selection */
-        .thickness-group {
-            margin-bottom: 10px;
-            background: rgba(50, 50, 50, 0.5);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .thickness-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 12px;
-            background: rgba(60, 60, 60, 0.6);
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        .thickness-header:hover {
-            background: rgba(70, 70, 70, 0.6);
-        }
-        
-        .thickness-header h4 {
-            font-size: 12px;
-            color: #fff;
-            margin: 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .collapse-icon {
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.3s;
-        }
-        
-        .collapse-icon::before {
-            content: '▼';
-            color: #999;
-            font-size: 10px;
-        }
-        
-        .thickness-group.collapsed .collapse-icon {
-            transform: rotate(-90deg);
-        }
-        
-        .width-options {
-            display: flex;
-            gap: 6px;
-            padding: 8px;
-            max-height: 200px; 
-            overflow: hidden;
-            transition: max-height 0.3s ease, padding 0.3s ease;
-        }
-        
-        .thickness-group.collapsed .width-options {
-            max-height: 0;
-            padding: 0 8px;
-        }
-        
-        .wood-option {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 6px 4px;
-            background: rgba(60, 60, 60, 0.6);
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-            flex: 1;
-            min-width: 0;
-        }
-        
-        .wood-option:hover {
-            background: rgba(80, 80, 80, 0.6);
-            transform: translateY(-2px);
-        }
-        
-        .wood-option.active {
-            background: rgba(33, 150, 243, 0.2);
-            border-color: #2196f3;
-        }
-        
-        .wood-icon { 
-            width: 100%;
-            max-width: 60px;
-            height: 20px;
-            margin-bottom: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            background: #2a2a2a; 
-        }
-        
-        .wood-label {
-            font-size: 9px;
-            font-weight: 500;
-            color: #fff;
-            text-align: center;
-            line-height: 1.2;
-        }
-        
-        /* Project Management */
-        .project-list {
-            margin-bottom: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        .project-item {
-            padding: 8px 10px;
-            margin: 4px 0;
-            background: rgba(60, 60, 60, 0.6);
-            border-radius: 6px;
-            cursor: default; 
-            font-size: 12px;
-            display: flex;
-            flex-wrap: wrap; 
-            justify-content: space-between;
-            align-items: center;
-            color: #fff;
-            transition: background-color 0.2s;
-            position: relative;
-        }
-        
-        .project-item:hover {
-            background: rgba(75, 75, 75, 0.7);
-        }
-        .project-item:hover .project-actions {
-            opacity: 1;
-        }
-        
-        .project-item.active {
-            background: rgba(33, 150, 243, 0.2);
-            font-weight: 500;
-            border: 1px solid #2196f3;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow: hidden; user-select: none; background: #1a1a1a; }
+        #canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; cursor: grab; }
+        #canvas.grabbing { cursor: grabbing; }
+        .menu-button { position: fixed; left: 20px; top: 20px; width: 40px; height: 40px; background: rgba(40, 40, 40, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; z-index: 1001; transition: all 0.2s; }
+        .menu-button:hover { background: rgba(60, 60, 60, 0.9); }
+        .menu-button span { width: 24px; height: 2px; background: #fff; transition: all 0.3s; }
+        .menu-button.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+        .menu-button.active span:nth-child(2) { opacity: 0; }
+        .menu-button.active span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
 
-        .project-name {
-            flex-grow: 1; 
-            cursor: pointer; 
-            padding: 2px 4px;
-            margin-right: 5px;
-        }
+        .side-panel { position: fixed; left: -350px; top: 0; background: rgba(40, 40, 40, 0.95); height: 100vh; width: 330px; padding: 20px; box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5); overflow-y: auto; transition: left 0.3s ease; z-index: 1000; }
+        .side-panel.active { left: 0; }
+        .side-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .side-panel-title { margin-left: 50px; font-size: 16px; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
+        .settings-button { background: rgba(60, 60, 60, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: #ccc; }
+        .settings-button:hover { background: rgba(80, 80, 80, 0.7); color: #fff; }
+        .settings-button.active { background: rgba(33, 150, 243, 0.3); border-color: #2196f3; color: #4fc3f7; }
+        .settings-panel { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, margin-bottom 0.3s ease; margin-bottom: 0; background: rgba(50, 50, 50, 0.4); border-radius: 8px; }
+        .settings-panel.expanded { max-height: 300px; margin-bottom: 20px; }
+        .settings-panel-inner { padding: 15px; }
+        .settings-panel h3 { font-size: 12px; color: #4fc3f7; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
 
-        .project-actions {
-            display: flex;
-            align-items: center;
-            opacity: 0;
-            transition: opacity 0.2s ease-in-out;
-        }
-         .project-actions button {
-            background: none;
-            border: none;
-            color: #bbb;
-            cursor: pointer;
-            padding: 3px 5px;
-            font-size: 11px;
-            margin-left: 3px;
-            border-radius: 3px;
-        }
-        .project-actions button:hover {
-            color: #fff;
-            background-color: rgba(255,255,255,0.1);
-        }
-        
-        .project-delete-confirm {
-            display: none; 
-            width: 100%;
-            background-color: rgba(80, 80, 80, 0.85);
-            padding: 8px;
-            margin-top: 6px;
-            border-radius: 4px;
-            text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        }
-        .project-delete-confirm.visible {
-            display: block;
-        }
-        .project-delete-confirm span {
-            font-size: 11px;
-            margin-right: 10px;
-            color: #eee;
-        }
-        .project-delete-confirm button {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 14px; 
-            cursor: pointer;
-            padding: 3px 6px;
-            border-radius: 4px;
-            transition: background-color 0.2s;
-        }
+        .panel-section { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .panel-section:last-child { border-bottom: none; }
+        .panel-section h3 { font-size: 14px; margin-bottom: 15px; color: #fff; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+        .panel-section h3 .add-project-btn { background: none; border: none; color: #4fc3f7; font-size: 16px; cursor: pointer; padding: 0 5px; }
+        .panel-section h3 .add-project-btn:hover { color: #fff; }
+
+        .thickness-group { margin-bottom: 10px; background: rgba(50, 50, 50, 0.5); border-radius: 8px; overflow: hidden; }
+        .thickness-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: rgba(60, 60, 60, 0.6); cursor: pointer; transition: background 0.2s; }
+        .thickness-header:hover { background: rgba(70, 70, 70, 0.6); }
+        .thickness-header h4 { font-size: 12px; color: #fff; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .collapse-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; transition: transform 0.3s; }
+        .collapse-icon::before { content: '▼'; color: #999; font-size: 10px; }
+        .thickness-group.collapsed .collapse-icon { transform: rotate(-90deg); }
+        .width-options { display: flex; gap: 6px; padding: 8px; max-height: 200px; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+        .thickness-group.collapsed .width-options { max-height: 0; padding: 0 8px; }
+
+        .wood-option { display: flex; flex-direction: column; align-items: center; padding: 6px 4px; background: rgba(60, 60, 60, 0.6); border-radius: 6px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; flex: 1; min-width: 0; }
+        .wood-option:hover { background: rgba(80, 80, 80, 0.6); transform: translateY(-2px); }
+        .wood-option.active { background: rgba(33, 150, 243, 0.2); border-color: #2196f3; }
+        .wood-icon { width: 100%; max-width: 60px; height: 20px; margin-bottom: 4px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 3px; background: #2a2a2a; }
+        .wood-label { font-size: 9px; font-weight: 500; color: #fff; text-align: center; line-height: 1.2; }
+
+        .project-list { margin-bottom: 10px; max-height: 200px; overflow-y: auto; }
+        .project-item { padding: 8px 10px; margin: 4px 0; background: rgba(60, 60, 60, 0.6); border-radius: 6px; cursor: default; font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; color: #fff; transition: background-color 0.2s; position: relative; }
+        .project-item:hover { background: rgba(75, 75, 75, 0.7); }
+        .project-item:hover .project-actions { opacity: 1; }
+        .project-item.active { background: rgba(33, 150, 243, 0.2); font-weight: 500; border: 1px solid #2196f3; }
+        .project-name { flex-grow: 1; cursor: pointer; padding: 2px 4px; margin-right: 5px; }
+        .project-actions { display: flex; align-items: center; opacity: 0; transition: opacity 0.2s ease-in-out; }
+        .project-actions button { background: none; border: none; color: #bbb; cursor: pointer; padding: 3px 5px; font-size: 11px; margin-left: 3px; border-radius: 3px; }
+        .project-actions button:hover { color: #fff; background-color: rgba(255,255,255,0.1); }
+        .project-delete-confirm { display: none; width: 100%; background-color: rgba(80, 80, 80, 0.85); padding: 8px; margin-top: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .project-delete-confirm.visible { display: block; }
+        .project-delete-confirm span { font-size: 11px; margin-right: 10px; color: #eee; }
+        .project-delete-confirm button { background: none; border: none; color: white; font-size: 14px; cursor: pointer; padding: 3px 6px; border-radius: 4px; transition: background-color 0.2s; }
         .project-delete-confirm .confirm-yes { color: #4CAF50; }
         .project-delete-confirm .confirm-yes:hover { background-color: rgba(76, 175, 80, 0.2); }
         .project-delete-confirm .confirm-no { color: #f44336; }
         .project-delete-confirm .confirm-no:hover { background-color: rgba(244, 67, 54, 0.2); }
+        .project-edit-form, .new-project-input-item { width: 100%; display: flex; align-items: center; padding: 5px 0; }
+        .project-edit-form input[type="text"], .new-project-input-item input[type="text"] { flex-grow: 1; background: rgba(20,20,20,0.9); border: 1px solid #555; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; margin-right: 5px; }
+        .project-edit-form input[type="text"]:focus, .new-project-input-item input[type="text"]:focus { border-color: #2196f3; outline: none; }
+        .project-edit-form button, .new-project-input-item button { background: none; border: 1px solid #555; color: #ccc; font-size: 13px; cursor: pointer; padding: 5px 7px; border-radius: 4px; margin-left: 3px; transition: all 0.2s; }
+        .project-edit-form button:hover, .new-project-input-item button:hover { background-color: rgba(255,255,255,0.1); color: #fff; }
+        .project-edit-form .confirm-edit-project, .new-project-input-item .confirm-new-project { border-color: #4CAF50; color: #4CAF50; }
+        .project-edit-form .confirm-edit-project:hover, .new-project-input-item .confirm-new-project:hover { background-color: rgba(76, 175, 80, 0.2); color: #66bb6a; }
+        .project-edit-form .cancel-edit-project, .new-project-input-item .cancel-new-project { border-color: #f44336; color: #f44336; }
+        .project-edit-form .cancel-edit-project:hover, .new-project-input-item .cancel-new-project:hover { background-color: rgba(244, 67, 54, 0.2); color: #ef5350; }
+    
+        .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+        .settings-item:last-child { border-bottom: none; }
+        .settings-label { color: #fff; font-size: 12px; font-weight: 500; }
+        .toggle-switch { position: relative; width: 44px; height: 24px; background: rgba(255, 255, 255, 0.2); border-radius: 12px; cursor: pointer; transition: background 0.3s; }
+        .toggle-switch.active { background: #2196f3; }
+        .toggle-switch::after { content: ''; position: absolute; width: 20px; height: 20px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.3s; }
+        .toggle-switch.active::after { transform: translateX(20px); }
 
-        .project-edit-form, .new-project-input-item {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            padding: 5px 0;
-        }
-        .project-edit-form input[type="text"],
-        .new-project-input-item input[type="text"] {
-            flex-grow: 1;
-            background: rgba(20,20,20,0.9);
-            border: 1px solid #555;
-            color: white;
-            padding: 6px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-right: 5px;
-        }
-        .project-edit-form input[type="text"]:focus,
-        .new-project-input-item input[type="text"]:focus {
-            border-color: #2196f3;
-            outline: none;
-        }
-        .project-edit-form button,
-        .new-project-input-item button {
-            background: none;
-            border: 1px solid #555;
-            color: #ccc;
-            font-size: 13px;
-            cursor: pointer;
-            padding: 5px 7px;
-            border-radius: 4px;
-            margin-left: 3px;
-            transition: all 0.2s;
-        }
-        .project-edit-form button:hover,
-        .new-project-input-item button:hover {
-            background-color: rgba(255,255,255,0.1);
-            color: #fff;
-        }
-        .project-edit-form .confirm-edit-project,
-        .new-project-input-item .confirm-new-project {
-            border-color: #4CAF50; color: #4CAF50;
-        }
-        .project-edit-form .confirm-edit-project:hover,
-        .new-project-input-item .confirm-new-project:hover {
-            background-color: rgba(76, 175, 80, 0.2); color: #66bb6a;
-        }
-        .project-edit-form .cancel-edit-project,
-        .new-project-input-item .cancel-new-project {
-            border-color: #f44336; color: #f44336;
-        }
-        .project-edit-form .cancel-edit-project:hover,
-        .new-project-input-item .cancel-new-project:hover {
-            background-color: rgba(244, 67, 54, 0.2); color: #ef5350;
-        }
-        
-        /* Grid toggle in settings */
-        .settings-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            background: rgba(60, 60, 60, 0.6);
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        
-        .settings-label {
-            color: #fff;
-            font-size: 12px;
-        }
-        
-        .toggle-switch {
-            position: relative;
-            width: 44px;
-            height: 24px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        
-        .toggle-switch.active {
-            background: #2196f3;
-        }
-        
-        .toggle-switch::after {
-            content: '';
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            background: white;
-            border-radius: 50%;
-            top: 2px;
-            left: 2px;
-            transition: transform 0.3s;
-        }
-        
-        .toggle-switch.active::after {
-            transform: translateX(20px);
-        }
-        
-        /* Overlay for closing menu */
-        .menu-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: transparent; 
-            z-index: 999;
-            display: none;
-        }
-        
-        /* Settings Panel */
-        .settings-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 15px 20px;
-            background: rgba(60, 60, 60, 0.5);
-            border-radius: 8px;
-            margin-bottom: 15px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .settings-header:hover {
-            background: rgba(70, 70, 70, 0.6);
-        }
-        
-        .settings-header h3 {
-            font-size: 14px;
-            margin: 0;
-            color: #fff;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .settings-expand-icon {
-            transition: transform 0.3s;
-            color: #ccc;
-        }
-        
-        .settings-expand-icon.expanded {
-            transform: rotate(180deg);
-        }
-        
-        .settings-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-            margin-bottom: 15px;
-        }
-        
-        .settings-content.expanded {
-            max-height: 200px;
-        }
-        
-        .settings-content .settings-item {
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .settings-content .settings-item:last-child {
-            border-bottom: none;
-        }
-        
-        /* Info Panel */
-        .info-panel {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(40, 40, 40, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 12px;
-            min-width: 250px;
-            transition: opacity 0.3s;
-            z-index: 100; 
-        }
-        
-        .info-panel.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        
-        .info-panel h4 {
-            font-size: 13px;
-            margin-bottom: 10px;
-            color: #4fc3f7;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 5px 0;
-            color: #ccc;
-        }
-        
-        .info-label {
-            color: #fff;
-            font-weight: 500;
-        }
-        
-        .info-value {
-            color: #4fc3f7;
-            font-weight: 600;
-        }
+        .menu-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 999; display: none; }
+        .info-panel { position: fixed; bottom: 20px; left: 20px; background: rgba(40, 40, 40, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 15px; border-radius: 12px; font-size: 12px; min-width: 250px; transition: opacity 0.3s; z-index: 100; }
+        .info-panel.hidden { opacity: 0; pointer-events: none; }
+        .info-panel h4 { font-size: 13px; margin-bottom: 10px; color: #4fc3f7; text-transform: uppercase; letter-spacing: 0.5px; }
+        .info-row { display: flex; justify-content: space-between; margin: 5px 0; color: #ccc; }
+        .info-label { color: #fff; font-weight: 500; }
+        .info-value { color: #4fc3f7; font-weight: 600; }
 
-        .collision-warning {
-            background: rgba(255, 87, 34, 0.2);
-            border: 1px solid #ff5722;
-            color: #ff5722;
-            padding: 8px;
-            border-radius: 6px;
-            margin-top: 10px;
-            font-size: 11px;
-        }
+        .collision-warning { background: rgba(255, 87, 34, 0.2); border: 1px solid #ff5722; color: #ff5722; padding: 8px; border-radius: 6px; margin-top: 10px; font-size: 11px; }
 
-        /* Project Details */
-        .project-details {
-            background: rgba(50,50,50,0.6);
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 10px;
-        }
-        .project-details h4 {
-            font-size: 12px;
-            color: #4fc3f7;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 6px 0;
-            font-size: 11px;
-            color: #ccc;
-        }
+        .project-details { background: rgba(50,50,50,0.6); border-radius: 8px; padding: 15px; margin-top: 10px; }
+        .project-details h4 { font-size: 12px; color: #4fc3f7; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .detail-row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 11px; color: #ccc; }
         .detail-label { color: #fff; }
         .detail-value { color: #4fc3f7; font-weight: 600; }
 
-        .materials-breakdown {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255,255,255,0.1);
-        }
-        .material-item {
-            display: flex;
-            justify-content: space-between;
-            margin: 4px 0;
-            font-size: 10px;
-            color: #999;
-        }
+        .materials-breakdown { margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .material-item { display: flex; justify-content: space-between; margin: 4px 0; font-size: 10px; color: #999; }
+        .hotkey-guide { position: fixed; bottom: 20px; right: 20px; background: rgba(40, 40, 40, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 15px; border-radius: 12px; font-size: 11px; transition: opacity 0.3s; max-width: 300px; z-index: 100; }
+        .hotkey-guide.hidden { opacity: 0; pointer-events: none; }
+        .hotkey-group { margin-bottom: 10px; }
+        .hotkey-group h4 { font-size: 12px; margin-bottom: 5px; color: #4fc3f7; text-transform: uppercase; letter-spacing: 0.5px; }
+        .hotkey { display: flex; margin: 3px 0; color: #ccc; }
+        .hotkey-key { background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px; margin-right: 8px; font-family: monospace; min-width: 20px; text-align: center; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
 
-        /* Hotkey Guide */
-        .hotkey-guide {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(40, 40, 40, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 11px;
-            transition: opacity 0.3s;
-            max-width: 300px;
-            z-index: 100;
-        }
-        
-        .hotkey-guide.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        
-        .hotkey-group {
-            margin-bottom: 10px;
-        }
-        
-        .hotkey-group h4 {
-            font-size: 12px;
-            margin-bottom: 5px;
-            color: #4fc3f7;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .hotkey {
-            display: flex;
-            margin: 3px 0;
-            color: #ccc;
-        }
-        
-        .hotkey-key {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-right: 8px;
-            font-family: monospace;
-            min-width: 20px;
-            text-align: center;
-            color: #fff;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        
-        /* Measurement Display */
-        .measurement {
-            position: fixed;
-            background: rgba(33, 150, 243, 0.9);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            pointer-events: none;
-            transition: opacity 0.2s;
-            z-index: 1000; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        }
-        
-        .measurement.hidden {
-            opacity: 0;
-        }
-        
-        .measurement.typing {
-            background: rgba(76, 175, 80, 0.9); 
-        }
-        
-        .measurement-input { 
-            background: transparent;
-            border: none;
-            color: white;
-            font-weight: 600;
-            font-size: 13px;
-            outline: none;
-            width: 80px;
-            text-align: center;
-        }
+        .measurement { position: fixed; background: rgba(33, 150, 243, 0.9); color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; pointer-events: none; transition: opacity 0.2s; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        .measurement.hidden { opacity: 0; }
+        .measurement.typing { background: rgba(76, 175, 80, 0.9); }
+        .measurement-input { background: transparent; border: none; color: white; font-weight: 600; font-size: 13px; outline: none; width: 80px; text-align: center; }
 
-        /* Loading */
-        .loading {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 18px;
-            color: #999;
-        }
+        .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 18px; color: #999; }
+        .status-indicator { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(33, 150, 243, 0.9); color: white; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; pointer-events: none; transition: opacity 0.3s, background-color 0.3s; z-index: 1002; }
+        .status-indicator.hidden { opacity: 0; }
 
-        /* Status indicator */
-        .status-indicator {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(33, 150, 243, 0.9);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            pointer-events: none;
-            transition: opacity 0.3s, background-color 0.3s;
-            z-index: 1002; 
-        }
-        .status-indicator.hidden {
-            opacity: 0;
-        }
-        
-        /* Snap indicator */
-        .snap-indicator {
-            position: fixed;
-            background: rgba(76, 175, 80, 0.9);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            pointer-events: none;
-            transition: opacity 0.2s;
-            z-index: 1001;
-        }
-        
-        .snap-indicator.hidden {
-            opacity: 0;
-        }
+        .snap-indicator { position: fixed; background: rgba(76, 175, 80, 0.9); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; pointer-events: none; transition: opacity 0.2s; z-index: 1001; }
+        .snap-indicator.hidden { opacity: 0; }
     </style>
 </head>
 <body>
@@ -739,20 +138,25 @@
     <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()"></div>
     
     <div class="side-panel" id="sidePanel">
-        <div class="panel-section">
-            <div class="settings-header" onclick="toggleSettingsSection()">
-                <h3>
-                    <i class="fas fa-cog" style="margin-right: 10px;"></i>
-                    <span>Settings</span>
-                    <span class="settings-expand-icon" id="settingsExpandIcon"><i class="fas fa-chevron-down"></i></span>
-                </h3>
-            </div>
-            <div class="settings-content" id="settingsContent"> <div class="settings-item">
+        <div class="side-panel-header">
+            <div class="side-panel-title">Workshop</div>
+            <button class="settings-button" id="settingsButton" onclick="toggleSettingsSection()" title="Settings">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+        
+        <div class="settings-panel" id="settingsContent">
+            <div class="settings-panel-inner">
+                <h3><i class="fas fa-cog"></i> Settings</h3>
+                <div class="settings-item">
                     <span class="settings-label">Grid Snap (G)</span>
-                    <div class="toggle-switch" id="gridToggle" onclick="app.toggleGridSnap()">
-                        </div>
+                    <div class="toggle-switch" id="gridToggle" onclick="app.toggleGridSnap()"></div>
                 </div>
+                <div class="settings-item">
+                    <span class="settings-label">Hotkey Guide</span>
+                    <div class="toggle-switch" id="hotkeyToggle" onclick="app.toggleHotkeyGuide()"></div>
                 </div>
+            </div>
         </div>
         <div class="panel-section">
             <h3>
@@ -1382,7 +786,37 @@
             app.gridSnapEnabled = !app.gridSnapEnabled;
             document.getElementById('gridToggle').classList.toggle('active', app.gridSnapEnabled);
             showStatus(`Grid snap ${app.gridSnapEnabled ? 'enabled' : 'disabled'}`);
+            
+            // Save grid snap setting
+            try {
+                localStorage.setItem('gridSnapEnabled', JSON.stringify(app.gridSnapEnabled));
+            } catch (e) {
+                console.error('Failed to save grid snap setting:', e);
+            }
+            
             updateProjectDetails();
+        };
+
+        app.toggleHotkeyGuide = function() {
+            app.hotkeyGuideEnabled = !app.hotkeyGuideEnabled;
+            document.getElementById('hotkeyToggle').classList.toggle('active', app.hotkeyGuideEnabled);
+            
+            const guide = document.getElementById('hotkeyGuide');
+            if (!app.hotkeyGuideEnabled) {
+                guide.classList.add('hidden');
+            } else {
+                // Re-enable activity-based hiding
+                trackActivity();
+            }
+            
+            showStatus(`Hotkey guide ${app.hotkeyGuideEnabled ? 'enabled' : 'disabled'}`);
+            
+            // Save hotkey guide setting
+            try {
+                localStorage.setItem('hotkeyGuideEnabled', JSON.stringify(app.hotkeyGuideEnabled));
+            } catch (e) {
+                console.error('Failed to save hotkey guide setting:', e);
+            }
         };
         
         function updateProjectDetails() {
@@ -1524,15 +958,81 @@
         
         function trackActivity() {
             app.lastActivity = Date.now();
-            document.getElementById('hotkeyGuide').classList.remove('hidden');
-            clearTimeout(app.activityTimeout);
-            app.activityTimeout = setTimeout(() => {
-                if (Date.now() - app.lastActivity >= 5000) {
-                    document.getElementById('hotkeyGuide').classList.add('hidden');
-                }
-            }, 5000);
+            
+            // Only show hotkey guide if it's enabled
+            if (app.hotkeyGuideEnabled) {
+                document.getElementById('hotkeyGuide').classList.remove('hidden');
+                clearTimeout(app.activityTimeout);
+                app.activityTimeout = setTimeout(() => {
+                    if (Date.now() - app.lastActivity >= 5000 && app.hotkeyGuideEnabled) {
+                        document.getElementById('hotkeyGuide').classList.add('hidden');
+                    }
+                }, 5000);
+            }
         }
-        
+
+        function loadSettings() {
+            // Load grid snap setting
+            try {
+                const savedGridSnap = localStorage.getItem('gridSnapEnabled');
+                app.gridSnapEnabled = savedGridSnap ? JSON.parse(savedGridSnap) : true;
+            } catch (e) {
+                console.error('Failed to load grid snap setting:', e);
+                app.gridSnapEnabled = true;
+            }
+            
+            // Load hotkey guide setting
+            try {
+                const savedHotkeyGuide = localStorage.getItem('hotkeyGuideEnabled');
+                app.hotkeyGuideEnabled = savedHotkeyGuide ? JSON.parse(savedHotkeyGuide) : true;
+            } catch (e) {
+                console.error('Failed to load hotkey guide setting:', e);
+                app.hotkeyGuideEnabled = true;
+            }
+            
+            // Load settings panel expanded state
+            try {
+                const savedSettingsExpanded = localStorage.getItem('settingsPanelExpanded');
+                app.settingsPanelExpanded = savedSettingsExpanded ? JSON.parse(savedSettingsExpanded) : false;
+            } catch (e) {
+                console.error('Failed to load settings panel state:', e);
+                app.settingsPanelExpanded = false;
+            }
+        }
+
+        function applySettings() {
+            // Apply grid snap setting
+            const gridToggleElement = document.getElementById('gridToggle');
+            if (gridToggleElement) {
+                gridToggleElement.classList.toggle('active', app.gridSnapEnabled);
+            }
+            
+            // Apply hotkey guide setting
+            const hotkeyToggleElement = document.getElementById('hotkeyToggle');
+            if (hotkeyToggleElement) {
+                hotkeyToggleElement.classList.toggle('active', app.hotkeyGuideEnabled);
+            }
+            
+            // Apply settings panel expanded state
+            const settingsContent = document.getElementById('settingsContent');
+            const settingsButton = document.getElementById('settingsButton');
+            if (settingsContent && settingsButton) {
+                if (app.settingsPanelExpanded) {
+                    settingsContent.classList.add('expanded');
+                    settingsButton.classList.add('active');
+                } else {
+                    settingsContent.classList.remove('expanded');
+                    settingsButton.classList.remove('active');
+                }
+            }
+            
+            // Apply hotkey guide visibility
+            const hotkeyGuide = document.getElementById('hotkeyGuide');
+            if (hotkeyGuide && !app.hotkeyGuideEnabled) {
+                hotkeyGuide.classList.add('hidden');
+            }
+        }
+
         function toggleMenu() {
             const panel = document.getElementById('sidePanel');
             const button = document.getElementById('menuButton');
@@ -1551,10 +1051,19 @@
         
         function toggleSettingsSection() {
             const content = document.getElementById('settingsContent');
-            const icon = document.getElementById('settingsExpandIcon');
+            const button = document.getElementById('settingsButton');
             
             content.classList.toggle('expanded');
-            icon.classList.toggle('expanded');
+            button.classList.toggle('active');
+            
+            // Save settings panel state
+            try {
+                const isExpanded = content.classList.contains('expanded');
+                localStorage.setItem('settingsPanelExpanded', JSON.stringify(isExpanded));
+            } catch (e) {
+                console.error('Failed to save settings panel state:', e);
+            }
+            
             trackActivity();
         }
         
@@ -1804,19 +1313,12 @@
             app.scene.add(gridHelper);
             
             loadCollapsedState();
+            loadSettings();
             initializeMaterialPanel();
             loadProjects(); 
             
-            // Initialize UI states for settings section elements
-            const gridToggleElement = document.getElementById('gridToggle');
-            if (gridToggleElement) {
-                gridToggleElement.classList.toggle('active', app.gridSnapEnabled);
-            }
-
-            // The settings section (settingsContent and settingsExpandIcon)
-            // should default to a collapsed state based on CSS.
-            // toggleSettingsSection() will manage their 'expanded' classes.
-            // No specific initialization is needed here if CSS handles the default collapsed state.
+            // Apply all loaded settings to UI
+            applySettings();
 
             app.measurementElement = document.getElementById('measurement');
             
