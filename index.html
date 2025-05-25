@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Wood Construction (Refactored)</title>
+    <title>3D Wood Construction (Fixed Movement)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -281,7 +281,9 @@
                 // Reference plane data for stable free movement
                 referencePlane: null,
                 referenceCenter: null,
-                initialIntersection: null
+                initialIntersection: null,
+                // Track collision state during movement
+                hasCollisions: false
             },
             
             // Visual helpers
@@ -298,6 +300,8 @@
             // Grid snap
             gridSize: 10, 
             gridSnapEnabled: true,
+            hotkeyGuideEnabled: true,
+            settingsPanelExpanded: false,
             
             // UI State
             collapsedThicknesses: new Set(),
@@ -350,7 +354,7 @@
                 this.name = name;
             }
             
-            apply(pieces, movement, startPositions) {
+            apply(pieces, movement, startPositions, mode) {
                 // Override in subclasses
                 return movement;
             }
@@ -361,7 +365,7 @@
                 super('floor');
             }
             
-            apply(pieces, movement, startPositions) {
+            apply(pieces, movement, startPositions, mode) {
                 let constrainedMovement = movement.clone();
                 let minZCorrection = 0;
                 
@@ -374,7 +378,8 @@
                     tempPiece.position.copy(newPos);
                     tempPiece.updateMatrixWorld(true);
                     
-                    const box = new THREE.Box3().setFromObject(tempPiece);
+                    // Use logical bounding box for floor constraint
+                    const box = getLogicalBoundingBox(tempPiece);
                     if (box.min.z < 0) {
                         minZCorrection = Math.max(minZCorrection, -box.min.z);
                     }
@@ -393,10 +398,30 @@
                 super('collision');
             }
             
-            apply(pieces, movement, startPositions) {
+            apply(pieces, movement, startPositions, mode) {
                 // Only check collisions if there's meaningful movement
                 if (movement.lengthSq() < 0.000001) return movement;
                 
+                // During dragging, allow movement but track collision state
+                if (mode === 'drag') {
+                    const hasCollisions = this.checkForCollisions(pieces, movement, startPositions);
+                    app.movementState.hasCollisions = hasCollisions;
+                    if (hasCollisions) {
+                        showStatus('⚠️ Collision detected - will snap on release', true, 1000);
+                    }
+                    return movement; // Always allow movement during dragging
+                }
+                
+                // For non-dragging modes (typed, step), still prevent collision
+                const hasCollisions = this.checkForCollisions(pieces, movement, startPositions);
+                if (hasCollisions) {
+                    return new THREE.Vector3(); // Block movement for typed/step modes
+                }
+                
+                return movement;
+            }
+            
+            checkForCollisions(pieces, movement, startPositions) {
                 // Get all pieces that are NOT currently being moved
                 const staticPieces = app.scene.children.filter(
                     obj => obj.userData.isWoodPiece && !pieces.has(obj)
@@ -413,9 +438,9 @@
                     tempPiece.position.copy(newPos);
                     tempPiece.updateMatrixWorld(true);
                     
-                    const box = new THREE.Box3().setFromObject(tempPiece);
-                    // Adjust for geometry padding
-                    box.expandByScalar(-GEOMETRY_PADDING);
+                    // Use logical bounding box with small collision tolerance
+                    const box = getLogicalBoundingBox(tempPiece);
+                    box.expandByScalar(-COLLISION_TOLERANCE);
                     testBoxes.push({ box, piece, originalPiece: piece });
                 });
                 
@@ -431,11 +456,11 @@
                             continue;
                         }
                         
-                        const staticBox = new THREE.Box3().setFromObject(staticPiece);
-                        staticBox.expandByScalar(-GEOMETRY_PADDING);
+                        const staticBox = getLogicalBoundingBox(staticPiece);
+                        staticBox.expandByScalar(-COLLISION_TOLERANCE);
                         
                         if (boxesOverlap(movingBox, staticBox, COLLISION_TOLERANCE)) {
-                            return new THREE.Vector3(); // No movement allowed
+                            return true; // Collision detected
                         }
                     }
                     
@@ -450,12 +475,12 @@
                         }
                         
                         if (boxesOverlap(movingBox, otherMovingBox, COLLISION_TOLERANCE)) {
-                            return new THREE.Vector3(); // No movement allowed
+                            return true; // Collision detected
                         }
                     }
                 }
                 
-                return movement;
+                return false; // No collisions
             }
         }
         
@@ -464,7 +489,7 @@
                 super('snap');
             }
             
-            apply(pieces, movement, startPositions) {
+            apply(pieces, movement, startPositions, mode) {
                 if (!app.gridSnapEnabled && pieces.size === 0) return movement;
                 
                 let snappedMovement = movement.clone();
@@ -483,10 +508,10 @@
                     tempPiece.position.copy(startPos).add(snappedMovement);
                     tempPiece.updateMatrixWorld(true);
                     
-                    // Use actual geometry bounds for snap calculation (no padding adjustment)
-                    const movingBox = new THREE.Box3().setFromObject(tempPiece);
+                    // Use logical bounding box for perfect rectangular snapping
+                    const movingBox = getLogicalBoundingBox(tempPiece);
                     
-                    // Floor snap - use actual geometry
+                    // Floor snap - use logical geometry for perfect floor contact
                     if (Math.abs(movingBox.min.z) < bestSnapDistance) {
                         const snapOffset = -movingBox.min.z;
                         snappedMovement.z = movement.z + snapOffset;
@@ -494,11 +519,11 @@
                         bestSnapDistance = Math.abs(snapOffset);
                     }
                     
-                    // Object snapping - use actual geometry bounds for positioning
+                    // Object snapping - use logical geometry for perfect touching
                     staticPieces.forEach(staticPiece => {
-                        const staticBox = new THREE.Box3().setFromObject(staticPiece);
+                        const staticBox = getLogicalBoundingBox(staticPiece);
                         
-                        // Test each face for snapping using actual geometry
+                        // Test each face for snapping using logical geometry for perfect touch
                         const tests = [
                             { face: 'minX', axis: 'x', movingVal: () => movingBox.min.x, staticVal: () => staticBox.max.x },
                             { face: 'maxX', axis: 'x', movingVal: () => movingBox.max.x, staticVal: () => staticBox.min.x },
@@ -512,20 +537,20 @@
                             const dist = Math.abs(test.movingVal() - test.staticVal());
                             
                             if (dist < bestSnapDistance) {
-                                // Check if faces would overlap on other axes using padded boxes for collision check
-                                const movingBoxPadded = movingBox.clone();
-                                const staticBoxPadded = staticBox.clone();
-                                movingBoxPadded.expandByScalar(-GEOMETRY_PADDING);
-                                staticBoxPadded.expandByScalar(-GEOMETRY_PADDING);
+                                // Check if faces would overlap on other axes using logical boxes with collision tolerance
+                                const movingBoxCollision = getLogicalBoundingBox(tempPiece);
+                                const staticBoxCollision = getLogicalBoundingBox(staticPiece);
+                                movingBoxCollision.expandByScalar(-COLLISION_TOLERANCE);
+                                staticBoxCollision.expandByScalar(-COLLISION_TOLERANCE);
                                 
                                 const otherAxes = ['x', 'y', 'z'].filter(a => a !== test.axis);
                                 let canSnap = true;
                                 
                                 for (const axis of otherAxes) {
-                                    const movingMin = movingBoxPadded.min[axis];
-                                    const movingMax = movingBoxPadded.max[axis];
-                                    const staticMin = staticBoxPadded.min[axis];
-                                    const staticMax = staticBoxPadded.max[axis];
+                                    const movingMin = movingBoxCollision.min[axis];
+                                    const movingMax = movingBoxCollision.max[axis];
+                                    const staticMin = staticBoxCollision.min[axis];
+                                    const staticMax = staticBoxCollision.max[axis];
                                     
                                     const overlap = Math.min(movingMax, staticMax) - Math.max(movingMin, staticMin);
                                     if (overlap <= 0) {
@@ -535,7 +560,7 @@
                                 }
                                 
                                 if (canSnap) {
-                                    // Calculate snap offset using actual geometry (no padding) for perfect touch
+                                    // Calculate snap offset using logical geometry for perfect touch (no gap)
                                     const snapOffset = test.staticVal() - test.movingVal();
                                     snappedMovement[test.axis] = movement[test.axis] + snapOffset;
                                     snapInfo = { type: 'object', face: test.face, distance: dist * 1000 };
@@ -571,12 +596,47 @@
             );
         }
         
-        function unifiedMove(pieces, desiredMovement, mode = 'drag') {
-            if (pieces.size === 0) return false;
+        // Get logical bounding box treating pieces as perfect rectangles
+        function getLogicalBoundingBox(piece) {
+            const { thickness, width, length } = piece.userData;
+            const t = thickness / 1000;
+            const w = width / 1000;
+            const l = length / 1000;
             
-            // Use a higher threshold for meaningful movement to avoid false collision warnings
-            // Especially important for small mouse movements during piece selection
-            const movementThreshold = mode === 'drag' ? 0.001 : 0.000001; // 1mm for drag, 0.001mm for typed/step
+            // Create perfect rectangular bounds in local space
+            const halfT = t / 2;
+            const halfW = w / 2;
+            const halfL = l / 2;
+            
+            // Transform to world space
+            const corners = [
+                new THREE.Vector3(-halfT, -halfW, -halfL),
+                new THREE.Vector3(halfT, -halfW, -halfL),
+                new THREE.Vector3(-halfT, halfW, -halfL),
+                new THREE.Vector3(halfT, halfW, -halfL),
+                new THREE.Vector3(-halfT, -halfW, halfL),
+                new THREE.Vector3(halfT, -halfW, halfL),
+                new THREE.Vector3(-halfT, halfW, halfL),
+                new THREE.Vector3(halfT, halfW, halfL)
+            ];
+            
+            // Transform corners to world space
+            const worldCorners = corners.map(corner => {
+                return corner.clone().applyMatrix4(piece.matrixWorld);
+            });
+            
+            // Create bounding box from transformed corners
+            const box = new THREE.Box3();
+            box.setFromPoints(worldCorners);
+            
+            return box;
+        }
+        
+        function unifiedMove(pieces, desiredMovement, mode = 'drag') {
+            if (pieces.size === 0) return true;
+            
+            // Use different thresholds based on mode
+            const movementThreshold = mode === 'drag' ? 0.0001 : 0.000001; // 0.1mm for drag, 0.001mm for typed/step
             if (desiredMovement.lengthSq() < movementThreshold) return true;
             
             // Initialize movement state if needed
@@ -598,10 +658,36 @@
             ];
             
             constraints.forEach(constraint => {
-                finalMovement = constraint.apply(pieces, finalMovement, app.movementState.startPositions);
+                finalMovement = constraint.apply(pieces, finalMovement, app.movementState.startPositions, mode);
             });
             
-            // Check if movement is valid (not blocked by collision)
+            // For drag mode, always allow movement even if there are collisions
+            if (mode === 'drag') {
+                // Apply the movement regardless of collisions
+                pieces.forEach(piece => {
+                    const startPos = app.movementState.startPositions.get(piece);
+                    if (startPos) {
+                        piece.position.copy(startPos).add(finalMovement);
+                    }
+                });
+                
+                // Update state
+                app.movementState.currentOffset = finalMovement;
+                
+                // Show measurement
+                if (app.movementState.axis && Math.abs(finalMovement[app.movementState.axis]) > 0.0001) {
+                    const distance = Math.round(Math.abs(finalMovement[app.movementState.axis]) * 1000);
+                    showMeasurement(`${app.movementState.axis.toUpperCase()}: ${distance}mm`);
+                }
+                
+                updateGuideLines();
+                updateInfoPanel();
+                updateVisualHelpers();
+                
+                return true;
+            }
+            
+            // For non-drag modes, check if movement is blocked by collision
             const isBlocked = finalMovement.lengthSq() < 0.000001 && desiredMovement.lengthSq() > movementThreshold;
             
             if (isBlocked) {
@@ -642,6 +728,7 @@
             app.movementState.axis = axis;
             app.movementState.currentOffset.set(0, 0, 0);
             app.movementState.typedValue = '';
+            app.movementState.hasCollisions = false;
             app.movementState.startPositions.clear();
             
             app.selectedPieces.forEach(piece => {
@@ -688,6 +775,17 @@
             if (app.movementState.active && save) {
                 const movedDistance = app.movementState.currentOffset.lengthSq();
                 if (movedDistance > 0.000001) {
+                    // If there were collisions during drag movement, try to snap to a safe position
+                    if (app.movementState.hasCollisions && app.movementState.mode === 'drag') {
+                        const safePositions = findSafePositionsForPieces(app.selectedPieces);
+                        if (safePositions.size > 0) {
+                            safePositions.forEach((position, piece) => {
+                                piece.position.copy(position);
+                            });
+                            showStatus('Snapped to safe position', false, 2000);
+                        }
+                    }
+                    
                     saveState();
                     saveCurrentProject();
                     // Force a collision check after movement to update collision states
@@ -703,6 +801,7 @@
             app.movementState.startPositions.clear();
             app.movementState.typedValue = '';
             app.movementState.isDragging = false;
+            app.movementState.hasCollisions = false;
             
             // Clear reference plane data for free movement
             app.movementState.referencePlane = null;
@@ -716,6 +815,69 @@
             
             // Force collision check to ensure states are current
             checkCollisions();
+        }
+        
+        function findSafePositionsForPieces(pieces) {
+            const safePositions = new Map();
+            const maxAttempts = 20;
+            
+            pieces.forEach(piece => {
+                const originalPosition = piece.position.clone();
+                let foundSafe = false;
+                
+                // Try positions in expanding circles around current position
+                for (let attempt = 0; attempt < maxAttempts && !foundSafe; attempt++) {
+                    const angle = (attempt * 0.5) * Math.PI;
+                    const radius = 0.01 + (attempt * 0.005); // Start at 1cm, increase by 0.5cm each attempt
+                    
+                    const testPosition = originalPosition.clone();
+                    testPosition.x += Math.cos(angle) * radius;
+                    testPosition.y += Math.sin(angle) * radius;
+                    testPosition.copy(snapVectorToGrid(testPosition));
+                    
+                    // Test this position
+                    piece.position.copy(testPosition);
+                    piece.updateMatrixWorld(true);
+                    
+                    // Apply floor constraint using logical bounding box
+                    const box = getLogicalBoundingBox(piece);
+                    if (box.min.z < 0) {
+                        testPosition.z += -box.min.z;
+                        testPosition.z = snapToGrid(testPosition.z);
+                        piece.position.copy(testPosition);
+                        piece.updateMatrixWorld(true);
+                    }
+                    
+                    // Check for collisions with other pieces using logical bounding boxes
+                    const pieceBox = getLogicalBoundingBox(piece);
+                    pieceBox.expandByScalar(-COLLISION_TOLERANCE);
+                    
+                    let hasCollision = false;
+                    const allPieces = app.scene.children.filter(obj => obj.userData.isWoodPiece && obj !== piece);
+                    
+                    for (const otherPiece of allPieces) {
+                        const otherBox = getLogicalBoundingBox(otherPiece);
+                        otherBox.expandByScalar(-COLLISION_TOLERANCE);
+                        
+                        if (boxesOverlap(pieceBox, otherBox, COLLISION_TOLERANCE)) {
+                            hasCollision = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!hasCollision) {
+                        safePositions.set(piece, testPosition.clone());
+                        foundSafe = true;
+                    }
+                }
+                
+                // If no safe position found, keep original position
+                if (!foundSafe) {
+                    piece.position.copy(originalPosition);
+                }
+            });
+            
+            return safePositions;
         }
         
         // --- END UNIFIED MOVEMENT SYSTEM ---
@@ -940,8 +1102,11 @@
         }
 
         function updateVisualHelpers() {
+            // Update selection outlines for all selected pieces
             app.selectedPieces.forEach(piece => {
-                createSelectionOutline(piece); 
+                // Always recreate the outline to ensure it's in the correct position
+                removeSelectionOutline(piece);
+                createSelectionOutline(piece);
             });
         }
 
@@ -950,6 +1115,7 @@
                 app.movementState.lengthEditData.pieces.forEach(piece => {
                     const editData = app.movementState.lengthEditData.pieceData.get(piece);
                     if (editData) {
+                        removeResizeIndicator(piece);
                         createResizeIndicator(piece, editData.editFace);
                     }
                 });
@@ -1114,13 +1280,13 @@
             let attempts = 0;
             
             while (!foundPosition && attempts < maxAttempts) {
-                const pieceBox = new THREE.Box3().setFromObject(piece);
-                pieceBox.expandByScalar(-GEOMETRY_PADDING);
+                const pieceBox = getLogicalBoundingBox(piece);
+                pieceBox.expandByScalar(-COLLISION_TOLERANCE);
                 
                 let hasOverlap = false;
                 for (const otherPiece of allPieces) {
-                    const otherBox = new THREE.Box3().setFromObject(otherPiece);
-                    otherBox.expandByScalar(-GEOMETRY_PADDING);
+                    const otherBox = getLogicalBoundingBox(otherPiece);
+                    otherBox.expandByScalar(-COLLISION_TOLERANCE);
                     
                     if (boxesOverlap(pieceBox, otherBox, COLLISION_TOLERANCE)) {
                         hasOverlap = true;
@@ -1141,8 +1307,9 @@
                 }
             }
             
-            // Final floor constraint
-            const finalBox = new THREE.Box3().setFromObject(piece);
+            // Final floor constraint using logical bounding box
+            piece.updateMatrixWorld(true);
+            const finalBox = getLogicalBoundingBox(piece);
             if (finalBox.min.z < 0) {
                 piece.position.z += -finalBox.min.z;
                 piece.position.z = snapToGrid(piece.position.z);
@@ -1180,12 +1347,13 @@
                         continue;
                     }
                     
-                    const box1 = new THREE.Box3().setFromObject(piece1);
-                    const box2 = new THREE.Box3().setFromObject(piece2);
+                    // Use logical bounding boxes with collision tolerance
+                    const box1 = getLogicalBoundingBox(piece1);
+                    const box2 = getLogicalBoundingBox(piece2);
                     
-                    // Account for geometry padding
-                    box1.expandByScalar(-GEOMETRY_PADDING);
-                    box2.expandByScalar(-GEOMETRY_PADDING);
+                    // Account for collision tolerance
+                    box1.expandByScalar(-COLLISION_TOLERANCE);
+                    box2.expandByScalar(-COLLISION_TOLERANCE);
                     
                     if (boxesOverlap(box1, box2, COLLISION_TOLERANCE)) {
                         piece1.userData.isColliding = true;
@@ -1205,8 +1373,11 @@
             const weightInKg = (volumeInCm3 * app.woodDensity) / 1000;
             const costPerMeter = calculateLumberCost(thickness, width);
             const cost = costPerMeter * (length / 1000);
-            const box = new THREE.Box3().setFromObject(piece);
+            
+            // Use logical bounding box for height calculation
+            const box = getLogicalBoundingBox(piece);
             const heightAboveFloor = Math.max(0, box.min.z * 1000);
+            
             return { 
                 dimensions: `${thickness}×${width}×${length}mm`, 
                 volume: volumeInCm3, 
@@ -1726,6 +1897,9 @@
                     app.resizeIndicators.forEach((indicator, piece) => removeResizeIndicator(piece));
                     app.movementState.lengthEditData = null;
                     
+                    // Update visual helpers to refresh selection outlines
+                    updateVisualHelpers();
+                    
                     saveState();
                     saveCurrentProject();
                     checkCollisions();
@@ -1992,11 +2166,18 @@
             
             piece.position.copy(editData.originalPosition).add(worldShift);
             
-            // Floor constraint
-            const box = new THREE.Box3().setFromObject(piece);
+            // Floor constraint using logical bounding box
+            piece.updateMatrixWorld(true);
+            const box = getLogicalBoundingBox(piece);
             if (box.min.z < 0) {
                 piece.position.z += -box.min.z;
                 piece.position.z = snapToGrid(piece.position.z);
+            }
+            
+            // Update selection outline if this piece is selected
+            if (app.selectedPieces.has(piece)) {
+                removeSelectionOutline(piece);
+                createSelectionOutline(piece);
             }
             
             showMeasurement(`Length: ${snappedLength}mm`);
@@ -2029,9 +2210,10 @@
                     piece.position.copy(center).add(offset);
                 }
                 
-                // Snap to grid and apply floor constraint
+                // Snap to grid and apply floor constraint using logical bounding box
                 piece.position.copy(snapVectorToGrid(piece.position));
-                const box = new THREE.Box3().setFromObject(piece);
+                piece.updateMatrixWorld(true);
+                const box = getLogicalBoundingBox(piece);
                 if (box.min.z < 0) {
                     piece.position.z += -box.min.z;
                     piece.position.z = snapToGrid(piece.position.z);
@@ -2812,155 +2994,7 @@
             app.renderer.render(app.scene, app.camera);
         }
         
-        // Debug function to help identify collision detection issues
-        function debugCollisionDetection() {
-            const pieces = Array.from(app.scene.children.filter(obj => obj.userData.isWoodPiece));
-            console.log(`=== Collision Detection Debug ===`);
-            console.log(`Total pieces in scene: ${pieces.length}`);
-            
-            pieces.forEach((piece, index) => {
-                console.log(`Piece ${index}: ID=${piece.userData.id}, thickness=${piece.userData.thickness}, width=${piece.userData.width}, length=${piece.userData.length}, isColliding=${piece.userData.isColliding}`);
-            });
-            
-            let collisionChecks = 0;
-            let collisionsFound = 0;
-            
-            for (let i = 0; i < pieces.length; i++) {
-                for (let j = i + 1; j < pieces.length; j++) {
-                    const piece1 = pieces[i];
-                    const piece2 = pieces[j];
-                    collisionChecks++;
-                    
-                    if (piece1 === piece2) {
-                        console.error(`SELF COLLISION DETECTED: Piece ${i} checked against itself!`);
-                        continue;
-                    }
-                    
-                    const box1 = new THREE.Box3().setFromObject(piece1);
-                    const box2 = new THREE.Box3().setFromObject(piece2);
-                    box1.expandByScalar(-GEOMETRY_PADDING);
-                    box2.expandByScalar(-GEOMETRY_PADDING);
-                    
-                    if (boxesOverlap(box1, box2, COLLISION_TOLERANCE)) {
-                        collisionsFound++;
-                        console.log(`Collision between piece ${i} (ID: ${piece1.userData.id}) and piece ${j} (ID: ${piece2.userData.id})`);
-                    }
-                }
-            }
-            
-            console.log(`Total collision checks performed: ${collisionChecks}`);
-            console.log(`Total collisions found: ${collisionsFound}`);
-            console.log(`Expected collision checks: ${(pieces.length * (pieces.length - 1)) / 2}`);
-            console.log(`=== End Debug ===`);
-        }
-        
-        // Function to enable movement collision debugging
-        function enableMovementDebug() {
-            // Monkey patch the CollisionConstraint to enable debugging
-            const originalApply = CollisionConstraint.prototype.apply;
-            CollisionConstraint.prototype.apply = function(pieces, movement, startPositions) {
-                // Only check collisions if there's meaningful movement
-                if (movement.lengthSq() < 0.000001) return movement;
-                
-                console.log(`=== Movement Collision Debug ===`);
-                console.log(`Moving pieces count: ${pieces.size}`);
-                console.log(`Movement vector:`, movement);
-                
-                // Get all pieces that are NOT currently being moved
-                const allPieces = app.scene.children.filter(obj => obj.userData.isWoodPiece);
-                const staticPieces = allPieces.filter(obj => !pieces.has(obj));
-                
-                console.log(`Total pieces in scene: ${allPieces.length}`);
-                console.log(`Static pieces count: ${staticPieces.length}`);
-                console.log(`Moving piece IDs:`, Array.from(pieces).map(p => p.userData.id));
-                console.log(`Static piece IDs:`, staticPieces.map(p => p.userData.id));
-                
-                // Create test boxes for moving pieces at their new positions
-                const testBoxes = [];
-                pieces.forEach(piece => {
-                    const startPos = startPositions.get(piece);
-                    if (!startPos) {
-                        console.log(`No start position found for piece ${piece.userData.id}`);
-                        return;
-                    }
-                    
-                    const newPos = startPos.clone().add(movement);
-                    const tempPiece = piece.clone();
-                    tempPiece.position.copy(newPos);
-                    tempPiece.updateMatrixWorld(true);
-                    
-                    const box = new THREE.Box3().setFromObject(tempPiece);
-                    // Adjust for geometry padding
-                    box.expandByScalar(-GEOMETRY_PADDING);
-                    testBoxes.push({ box, piece, originalPiece: piece });
-                });
-                
-                console.log(`Test boxes created: ${testBoxes.length}`);
-                
-                // Check for collisions
-                for (let i = 0; i < testBoxes.length; i++) {
-                    const { box: movingBox, piece: movingPiece, originalPiece } = testBoxes[i];
-                    
-                    // Check against static pieces (pieces not being moved)
-                    for (const staticPiece of staticPieces) {
-                        // Explicit check to ensure we're not comparing a piece to itself
-                        if (originalPiece === staticPiece) {
-                            console.error(`Movement collision: Attempted self-collision check between piece ${originalPiece.userData.id} and itself!`);
-                            continue;
-                        }
-                        
-                        // Double check that the static piece is not in the moving pieces set
-                        if (pieces.has(staticPiece)) {
-                            console.error(`Movement collision: Static piece ${staticPiece.userData.id} is also in moving pieces set!`);
-                            continue;
-                        }
-                        
-                        const staticBox = new THREE.Box3().setFromObject(staticPiece);
-                        staticBox.expandByScalar(-GEOMETRY_PADDING);
-                        
-                        if (boxesOverlap(movingBox, staticBox, COLLISION_TOLERANCE)) {
-                            console.log(`Collision detected between moving piece ${originalPiece.userData.id} and static piece ${staticPiece.userData.id}`);
-                            console.log(`=== Movement Blocked ===`);
-                            return new THREE.Vector3(); // No movement allowed
-                        }
-                    }
-                    
-                    // Check against other moving pieces (but not the same piece)
-                    for (let j = i + 1; j < testBoxes.length; j++) {
-                        const { box: otherMovingBox, piece: otherMovingPiece, originalPiece: otherOriginalPiece } = testBoxes[j];
-                        
-                        // Explicit check to ensure we're not comparing a piece to itself
-                        if (originalPiece === otherOriginalPiece) {
-                            console.error(`Movement collision: Attempted self-collision check between moving pieces ${originalPiece.userData.id} and itself!`);
-                            continue;
-                        }
-                        
-                        if (boxesOverlap(movingBox, otherMovingBox, COLLISION_TOLERANCE)) {
-                            console.log(`Collision detected between moving pieces ${originalPiece.userData.id} and ${otherOriginalPiece.userData.id}`);
-                            console.log(`=== Movement Blocked ===`);
-                            return new THREE.Vector3(); // No movement allowed
-                        }
-                    }
-                }
-                
-                console.log(`No collisions detected, movement allowed`);
-                console.log(`=== End Movement Collision Debug ===`);
-                return movement;
-            };
-            console.log("Movement collision debugging enabled. Try moving a piece now.");
-        }
-        
-        // Function to disable movement collision debugging
-        function disableMovementDebug() {
-            // Restore original CollisionConstraint
-            delete CollisionConstraint.prototype.apply;
-            console.log("Movement collision debugging disabled.");
-        }
-        
         // Add debug functions to global scope for console access
-        window.debugCollisions = debugCollisionDetection;
-        window.enableMovementDebug = enableMovementDebug;
-        window.disableMovementDebug = disableMovementDebug;
         window.toggleSettingsSection = toggleSettingsSection;
         
         window.addEventListener('load', init);
