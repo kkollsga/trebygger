@@ -278,16 +278,32 @@
             
             // Get aligned bounds for a piece (bounds that align to grid)
             static getAlignedBounds(piece) {
-                const { thickness, width, length } = piece.userData;
-                const t = thickness / 1000;
-                const w = width / 1000;
-                const l = length / 1000;
-                
+                // Get the mesh from the piece group
+                const mesh = piece.userData.isWoodPiece ? piece.getObjectByName('mesh') : piece;
+                if (!mesh || !piece.userData) { // Ensure piece.userData exists
+                    console.warn("getAlignedBounds: Mesh or userData not found for piece", piece);
+                    return new THREE.Box3(); // Return empty bounds if essential data is missing
+                }
+
+                const { thickness, width } = piece.userData;
+
+                // --- MODIFICATION START ---
+                // Use currentPreviewLength if available (during length editing),
+                // otherwise use the stored/final length.
+                const currentLength = (piece.userData.currentPreviewLength !== undefined)
+                                    ? piece.userData.currentPreviewLength
+                                    : piece.userData.length;
+                // --- MODIFICATION END ---
+
+                const t = thickness / 1000; // Convert mm to meters
+                const w = width / 1000;   // Convert mm to meters
+                const l = currentLength / 1000; // Convert mm to meters, using the resolved current length
+
                 // Create bounds in local space
                 const halfT = t / 2;
                 const halfW = w / 2;
                 const halfL = l / 2;
-                
+
                 const corners = [
                     new THREE.Vector3(-halfT, -halfW, -halfL),
                     new THREE.Vector3(halfT, -halfW, -halfL),
@@ -298,12 +314,14 @@
                     new THREE.Vector3(-halfT, halfW, halfL),
                     new THREE.Vector3(halfT, halfW, halfL)
                 ];
-                
+
                 // Transform to world space
-                const worldCorners = corners.map(corner => 
+                // Ensure the piece's matrixWorld is up-to-date before this call if it might have changed.
+                // (The calling function, applyLengthChange, does call piece.updateMatrixWorld(true) before this)
+                const worldCorners = corners.map(corner =>
                     corner.clone().applyMatrix4(piece.matrixWorld)
                 );
-                
+
                 return new THREE.Box3().setFromPoints(worldCorners);
             }
             
@@ -756,9 +774,7 @@
                 hasCollisions: false
             },
             
-            // Visual helpers
-            selectionOutlines: new Map(), 
-            resizeIndicators: new Map(), 
+            // Visual helpers - removed selectionOutlines and resizeIndicators since they're integrated
             snapGhosts: new Map(),
             
             // Input state
@@ -876,9 +892,6 @@
                 if (mode === 'drag') {
                     const hasCollisions = GridSnapSystem.checkCollisions(pieces, movement, startPositions);
                     app.movementState.hasCollisions = hasCollisions;
-                    if (hasCollisions) {
-                        showStatus('⚠️ Collision detected - will snap on release', true, 1000);
-                    }
                     return movement; // Always allow movement during dragging
                 }
                 
@@ -890,9 +903,7 @@
                     const movedDistance = Math.sqrt(maxMovement.lengthSq()) * 1000; // Convert to mm
                     const requestedDistance = Math.sqrt(movement.lengthSq()) * 1000;
                     
-                    if (movedDistance < 1) { // Less than 1mm movement possible
-                        showStatus('⚠️ Movement blocked - pieces would collide!', true, 2000);
-                    } else {
+                    if (movedDistance > 1) { // Less than 1mm movement possible
                         showStatus(`Moved ${movedDistance.toFixed(0)}mm (${requestedDistance.toFixed(0)}mm requested)`, false, 2000);
                     }
                 }
@@ -967,7 +978,6 @@
                 
                 updateGuideLines();
                 updateInfoPanel();
-                updateVisualHelpers();
                 
                 return true;
             }
@@ -977,9 +987,6 @@
             
             if (isBlocked) {
                 // Only show collision warning for meaningful movement attempts
-                if (desiredMovement.lengthSq() > 0.01) { // 10mm threshold for showing warnings
-                    showStatus('⚠️ Movement blocked by collision!', true);
-                }
                 return false;
             }
             
@@ -1002,33 +1009,55 @@
             
             updateGuideLines();
             updateInfoPanel();
-            updateVisualHelpers();
             
             return true;
         }
         
-        function showSnapPreview(pieces, offset) {
-            hideSnapPreview();
-            
+        function showSnapPreview(pieces, finalMovementOffset) { // Renamed 'offset' to 'finalMovementOffset' for clarity
+            hideSnapPreview(); // Clear any existing previews
+
             pieces.forEach(piece => {
-                // Create wireframe ghost
-                const edges = new THREE.EdgesGeometry(piece.geometry);
-                const lineMaterial = new THREE.LineDashedMaterial({ 
-                    color: 0x4fc3f7, 
-                    linewidth: 1,
-                    dashSize: 0.02,
-                    gapSize: 0.01,
-                    opacity: 0.5,
+                // Get the mesh from the piece group
+                const mesh = piece.getObjectByName('mesh');
+                if (!mesh) {
+                    console.warn("Snap preview: Mesh not found for piece:", piece.userData.id || piece);
+                    return;
+                }
+
+                // Get the starting position of this piece at the beginning of the current movement operation
+                const startPos = app.movementState.startPositions.get(piece);
+                if (!startPos) {
+                    // This case should ideally not happen if movementState is managed correctly
+                    console.warn("Snap preview: startPosition not found for piece:", piece.userData.id || piece);
+                    return;
+                }
+
+                // Create wireframe ghost using the mesh's current geometry
+                // This ensures the preview matches the piece's shape, especially if length editing is involved
+                const edges = new THREE.EdgesGeometry(mesh.geometry);
+                const lineMaterial = new THREE.LineDashedMaterial({
+                    color: 0x4fc3f7,       // Blue color for the preview
+                    linewidth: 1,          // Note: linewidth > 1 has limitations in WebGL for these materials
+                    dashSize: 0.02,        // Length of the dashes
+                    gapSize: 0.01,         // Length of the gaps
+                    opacity: 0.5,          // Semi-transparent
                     transparent: true
                 });
                 const ghost = new THREE.LineSegments(edges, lineMaterial);
-                ghost.position.copy(piece.position).add(offset);
+                ghost.computeLineDistances(); // Necessary for dashed lines to render correctly
+
+                // Position the ghost: Start from the piece's original position at the beginning of the drag,
+                // then add the total calculated (snapped) offset for the current drag state.
+                ghost.position.copy(startPos).add(finalMovementOffset);
+
+                // Match the orientation and scale of the actual piece
                 ghost.quaternion.copy(piece.quaternion);
                 ghost.scale.copy(piece.scale);
-                ghost.userData.isSnapPreview = true;
-                
-                app.scene.add(ghost);
-                app.snapGhosts.set(piece, ghost);
+
+                ghost.userData.isSnapPreview = true; // Mark this object as a snap preview
+
+                app.scene.add(ghost); // Add the ghost to the scene
+                app.snapGhosts.set(piece, ghost); // Keep track of the ghost associated with each piece
             });
         }
         
@@ -1077,9 +1106,7 @@
             // Clear any collision warnings when starting movement
             app.selectedPieces.forEach(piece => {
                 piece.userData.isColliding = false;
-                if (!app.selectedPieces.has(piece)) {
-                    piece.material.color.setHex(0xB8956F);
-                }
+                updatePieceAppearance(piece);
             });
             
             updateGuideLines();
@@ -1102,7 +1129,6 @@
                             safePositions.forEach((position, piece) => {
                                 piece.position.copy(position);
                             });
-                            showStatus('Snapped to safe position', false, 2000);
                         }
                     }
                     
@@ -1156,6 +1182,151 @@
         }
         
         // --- END UNIFIED MOVEMENT SYSTEM ---
+        
+        // --- INTEGRATED PIECE RENDERING SYSTEM ---
+        
+        function createUnifiedWoodPiece(thickness, width, length = 500) {
+            // Create the main group that will contain both mesh and outline
+            const pieceGroup = new THREE.Group();
+            
+            // Create the mesh
+            const t = thickness / 1000;
+            const w = width / 1000;
+            const l = length / 1000;
+            const geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0xB8956F, 
+                roughness: 0.6, 
+                metalness: 0.05 
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.name = 'mesh'; // Name it so we can find it later
+            
+            // Create the outline (initially hidden)
+            const edges = new THREE.EdgesGeometry(geometry);
+            const lineMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x4fc3f7, 
+                linewidth: 2 
+            });
+            const outline = new THREE.LineSegments(edges, lineMaterial);
+            outline.name = 'outline';
+            outline.visible = false; // Hidden by default
+            
+            // Add both to the group
+            pieceGroup.add(mesh);
+            pieceGroup.add(outline);
+            
+            // Add unique ID for better collision debugging
+            const pieceId = 'piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            pieceGroup.userData = { 
+                thickness, 
+                width, 
+                length, 
+                isWoodPiece: true, 
+                geometryVersion: 1,
+                id: pieceId,
+                isSelected: false,
+                isColliding: false
+            };
+            
+            const halfLength = l / 2; 
+            const preferredPosition = new THREE.Vector3(
+                snapToGrid(app.cameraTarget.x),
+                snapToGrid(app.cameraTarget.y),
+                Math.max(halfLength, 0)
+            );
+            
+            app.scene.add(pieceGroup);
+            GridSnapSystem.findSafePosition(pieceGroup, preferredPosition);
+            
+            return pieceGroup;
+        }
+        
+        function updatePieceAppearance(piece) {
+            const mesh = piece.getObjectByName('mesh');
+            const outline = piece.getObjectByName('outline');
+            
+            if (!mesh || !outline) return;
+            
+            // Update selection outline visibility
+            outline.visible = piece.userData.isSelected;
+            
+            // Update mesh color based on state
+            if (piece.userData.isColliding) {
+                mesh.material.color.setHex(0xff4444); // Red for collision
+            } else {
+                mesh.material.color.setHex(0xB8956F); // Normal wood color
+            }
+        }
+        
+        function createResizeIndicator(piece, face) {
+            // Remove any existing resize indicator
+            const existingIndicator = piece.getObjectByName('resizeIndicator');
+            if (existingIndicator) {
+                piece.remove(existingIndicator);
+                existingIndicator.traverse((child) => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) child.material.dispose();
+                });
+            }
+            
+            const { thickness, width } = piece.userData; 
+            const length = piece.userData.currentPreviewLength || piece.userData.length; 
+
+            const t_m = thickness / 1000;
+            const w_m = width / 1000;
+            const l_m = length / 1000;
+            
+            const z = face === 'top' ? l_m / 2 : -l_m / 2;
+            const cylinderRadius = 0.002;
+            const edgeGroup = new THREE.Group();
+            edgeGroup.name = 'resizeIndicator';
+            
+            const corners = [
+                new THREE.Vector3(-t_m/2, -w_m/2, z), new THREE.Vector3(t_m/2, -w_m/2, z),
+                new THREE.Vector3(t_m/2, w_m/2, z), new THREE.Vector3(-t_m/2, w_m/2, z)
+            ];
+
+            for (let i = 0; i < 4; i++) {
+                const start = corners[i];
+                const end = corners[(i + 1) % 4];
+                const edgeVector = end.clone().sub(start);
+                const edgeLength = edgeVector.length();
+                const edgeCenter = start.clone().add(end).multiplyScalar(0.5);
+                
+                const cylinderGeometry = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, edgeLength, 8);
+                const cylinderMaterial = new THREE.MeshBasicMaterial({ color: 0x0d47a1 });
+                const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+                
+                cylinder.position.copy(edgeCenter);
+                if (edgeLength > 0) {
+                    cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), edgeVector.clone().normalize());
+                }
+                edgeGroup.add(cylinder);
+            }
+            
+            // Position the indicator with offset
+            const offsetFactor = 0.0015; 
+            const offsetVector = new THREE.Vector3(0, 0, face === 'top' ? offsetFactor : -offsetFactor);
+            edgeGroup.position.copy(offsetVector);
+            
+            piece.add(edgeGroup);
+        }
+
+        function removeResizeIndicator(piece) {
+            const indicator = piece.getObjectByName('resizeIndicator');
+            if (indicator) {
+                piece.remove(indicator);
+                indicator.traverse((child) => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) child.material.dispose();
+                });
+            }
+        }
+        
+        // --- END INTEGRATED PIECE RENDERING SYSTEM ---
         
         function loadCollapsedState() {
             try {
@@ -1290,113 +1461,6 @@
                 item.innerHTML = `<span>${dimension}</span><span>${meters.toFixed(2)}m</span>`;
                 breakdownDiv.appendChild(item);
             });
-        }
-        
-        function createSelectionOutline(piece) {
-            removeSelectionOutline(piece); 
-            const edges = new THREE.EdgesGeometry(piece.geometry); 
-            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x4fc3f7, linewidth: 2 }); 
-            const edgeLines = new THREE.LineSegments(edges, lineMaterial);
-            
-            edgeLines.position.copy(piece.position);
-            edgeLines.quaternion.copy(piece.quaternion);
-            edgeLines.scale.copy(piece.scale); 
-            
-            app.scene.add(edgeLines);
-            app.selectionOutlines.set(piece, edgeLines);
-            piece.userData.edgeLines = edgeLines; 
-        }
-
-        function removeSelectionOutline(piece) {
-            const outline = app.selectionOutlines.get(piece);
-            if (outline) {
-                app.scene.remove(outline);
-                if (outline.geometry) outline.geometry.dispose();
-                if (outline.material) outline.material.dispose();
-                app.selectionOutlines.delete(piece);
-                delete piece.userData.edgeLines;
-            }
-        }
-
-        function createResizeIndicator(piece, face) {
-            removeResizeIndicator(piece);
-            const { thickness, width } = piece.userData; 
-            const length = piece.userData.currentPreviewLength || piece.userData.length; 
-
-            const t_m = thickness / 1000;
-            const w_m = width / 1000;
-            const l_m = length / 1000;
-            
-            const z = face === 'top' ? l_m / 2 : -l_m / 2;
-            const cylinderRadius = 0.002;
-            const edgeGroup = new THREE.Group();
-            const corners = [
-                new THREE.Vector3(-t_m/2, -w_m/2, z), new THREE.Vector3(t_m/2, -w_m/2, z),
-                new THREE.Vector3(t_m/2, w_m/2, z), new THREE.Vector3(-t_m/2, w_m/2, z)
-            ];
-
-            for (let i = 0; i < 4; i++) {
-                const start = corners[i];
-                const end = corners[(i + 1) % 4];
-                const edgeVector = end.clone().sub(start);
-                const edgeLength = edgeVector.length();
-                const edgeCenter = start.clone().add(end).multiplyScalar(0.5);
-                
-                const cylinderGeometry = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, edgeLength, 8);
-                const cylinderMaterial = new THREE.MeshBasicMaterial({ color: 0x0d47a1 });
-                const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
-                
-                cylinder.position.copy(edgeCenter);
-                if (edgeLength > 0) {
-                    cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), edgeVector.clone().normalize());
-                }
-                edgeGroup.add(cylinder);
-            }
-            
-            edgeGroup.position.copy(piece.position);
-            edgeGroup.quaternion.copy(piece.quaternion);
-
-            const offsetFactor = 0.0015; 
-            const offsetVector = new THREE.Vector3(0, 0, face === 'top' ? offsetFactor : -offsetFactor);
-            offsetVector.applyQuaternion(piece.quaternion); 
-            edgeGroup.position.add(offsetVector);
-
-            edgeGroup.userData.isResizeIndicator = true;
-            app.scene.add(edgeGroup);
-            app.resizeIndicators.set(piece, edgeGroup);
-        }
-
-        function removeResizeIndicator(piece) {
-            const indicator = app.resizeIndicators.get(piece);
-            if (indicator) {
-                app.scene.remove(indicator);
-                indicator.traverse((child) => {
-                    if (child.geometry) child.geometry.dispose();
-                    if (child.material) child.material.dispose();
-                });
-                app.resizeIndicators.delete(piece);
-            }
-        }
-
-        function updateVisualHelpers() {
-            // Update selection outlines for all selected pieces
-            app.selectedPieces.forEach(piece => {
-                // Always recreate the outline to ensure it's in the correct position
-                removeSelectionOutline(piece);
-                createSelectionOutline(piece);
-            });
-        }
-
-        function updateResizeIndicators() {
-            if (app.movementState.lengthEditData && app.movementState.lengthEditData.pieces) {
-                app.movementState.lengthEditData.pieces.forEach(piece => {
-                    const editData = app.movementState.lengthEditData.pieceData.get(piece);
-                    if (editData) {
-                        removeResizeIndicator(piece);
-                        createResizeIndicator(piece, editData.editFace);
-                    }
-                });
-            }
         }
         
         function trackActivity() {
@@ -1544,19 +1608,17 @@
         function checkCollisions() {
             const collisions = GridSnapSystem.checkSceneCollisions();
             
-            // Reset all pieces to normal color and collision state
+            // Reset all pieces to normal state
             const allPieces = app.scene.children.filter(obj => obj.userData.isWoodPiece);
             allPieces.forEach(piece => {
                 piece.userData.isColliding = false;
-                if (!app.selectedPieces.has(piece)) {
-                    piece.material.color.setHex(0xB8956F);
-                }
+                updatePieceAppearance(piece);
             });
             
-            // Apply collision coloring
+            // Apply collision state
             collisions.forEach(piece => {
                 piece.userData.isColliding = true;
-                piece.material.color.setHex(0xff4444);
+                updatePieceAppearance(piece);
             });
             
             updateInfoPanel();
@@ -1810,35 +1872,7 @@
         }
         
         function createWoodPiece(thickness, width, length = 500) {
-            const t = thickness / 1000;
-            const w = width / 1000;
-            const l = length / 1000;
-            const geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4); 
-            const material = new THREE.MeshStandardMaterial({ color: 0xB8956F, roughness: 0.6, metalness: 0.05 });
-            const piece = new THREE.Mesh(geometry, material);
-            piece.castShadow = true;
-            piece.receiveShadow = true;
-            
-            // Add unique ID for better collision debugging
-            const pieceId = 'piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            piece.userData = { 
-                thickness, 
-                width, 
-                length, 
-                isWoodPiece: true, 
-                geometryVersion: 1,
-                id: pieceId
-            };
-            
-            const halfLength = l / 2; 
-            const preferredPosition = new THREE.Vector3(
-                snapToGrid(app.cameraTarget.x),
-                snapToGrid(app.cameraTarget.y),
-                Math.max(halfLength, 0)
-            );
-            
-            app.scene.add(piece);
-            GridSnapSystem.findSafePosition(piece, preferredPosition);
+            const piece = createUnifiedWoodPiece(thickness, width, length);
             
             clearSelection();
             app.selectedPieces.add(piece);
@@ -1873,67 +1907,99 @@
         
         function onMouseDown(event) {
             trackActivity();
-            
-            if (event.target.closest('.project-actions') || 
-                event.target.closest('.project-delete-confirm') || 
-                event.target.closest('.project-edit-form') || 
+
+            // Prevent canvas interaction if the click is on UI elements within the side panel
+            if (event.target.closest('.project-actions') ||
+                event.target.closest('.project-delete-confirm') ||
+                event.target.closest('.project-edit-form') ||
                 event.target.closest('.new-project-input-item')) {
                 return;
             }
-            
-            if (event.target.id !== 'canvas') return;
-            updateMouse(event);
 
-            if (event.button === 0) { 
+            if (event.target.id !== 'canvas') return; // Only process clicks on the canvas
+            updateMouse(event); // Update mouse coordinates for raycasting
+
+            if (event.button === 0) { // Left mouse button
                 app.mouseDown = true;
                 app.raycaster.setFromCamera(app.mouse, app.camera);
-                const objects = app.scene.children.filter(obj => obj.userData.isWoodPiece);
-                const intersects = app.raycaster.intersectObjects(objects, false); 
+
+                // Filter for piece groups and their meshes for raycasting
+                const raycastTargets = [];
+                app.scene.children.filter(obj => obj.userData.isWoodPiece).forEach(pieceGroup => {
+                    const mesh = pieceGroup.getObjectByName('mesh');
+                    if (mesh) raycastTargets.push(mesh);
+                });
+
+                const intersects = app.raycaster.intersectObjects(raycastTargets, false);
 
                 if (intersects.length > 0) {
-                    const clickedPiece = intersects[0].object;
-                    const intersectionPoint = intersects[0].point;
-                    
+                    const clickedMesh = intersects[0].object;
+                    const clickedPiece = clickedMesh.parent; // The piece group is the parent of the mesh
+
                     if (app.keys['v'] && app.selectedPieces.has(clickedPiece)) {
-                        // Length edit mode
-                        const face = intersects[0].face;
-                        const localNormal = face.normal.clone();
-                        const pieceNormal = new THREE.Vector3(0,0,1).applyQuaternion(clickedPiece.quaternion);
-                        
-                        if (Math.abs(localNormal.dot(pieceNormal)) > 0.9) {
-                            const worldNormal = localNormal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(clickedPiece.matrixWorld)).normalize();
-                            const pZAxis = new THREE.Vector3(0,0,1).applyQuaternion(clickedPiece.quaternion);
-                            const editFace = worldNormal.dot(pZAxis) > 0 ? 'top' : 'bottom';
-                            
+                        // --- LENGTH EDIT MODE ---
+                        const intersectionPointWorld = intersects[0].point.clone();
+                        // Convert the world intersection point to the piece's local coordinate system
+                        const localIntersectionPoint = clickedPiece.worldToLocal(intersectionPointWorld.clone());
+
+                        // Get piece dimensions in meters
+                        const pieceLengthM = clickedPiece.userData.length / 1000;
+                        const pieceThicknessM = clickedPiece.userData.thickness / 1000;
+                        const pieceWidthM = clickedPiece.userData.width / 1000;
+
+                        const halfLengthM = pieceLengthM / 2;
+                        const halfThicknessM = pieceThicknessM / 2;
+                        const halfWidthM = pieceWidthM / 2;
+
+                        // Tolerance for detecting a click on an end cap surface (e.g., 20mm)
+                        const clickToleranceZ = GridSnapSystem.FACE_SNAP_THRESHOLD || 0.020;
+
+                        let determinedEditFace = null;
+
+                        // Check if the click is within the X and Y bounds of the piece (in its local space)
+                        // and if its Z coordinate is close to one of the ends.
+                        if (Math.abs(localIntersectionPoint.x) <= halfThicknessM + FLOAT_PRECISION &&
+                            Math.abs(localIntersectionPoint.y) <= halfWidthM + FLOAT_PRECISION) {
+
+                            if (Math.abs(localIntersectionPoint.z - halfLengthM) < clickToleranceZ) {
+                                determinedEditFace = 'top'; // Clicked near the positive Z end (local +Z)
+                            } else if (Math.abs(localIntersectionPoint.z + halfLengthM) < clickToleranceZ) {
+                                determinedEditFace = 'bottom'; // Clicked near the negative Z end (local -Z)
+                            }
+                        }
+
+                        if (determinedEditFace) {
                             app.movementState.lengthEditData = {
                                 pieces: new Set(app.selectedPieces),
                                 pieceData: new Map(),
-                                startMouseX: event.clientX
+                                startMouseX: event.clientX // Using clientX for direct mouse delta later
                             };
-                            
+
                             app.selectedPieces.forEach(p => {
                                 app.movementState.lengthEditData.pieceData.set(p, {
                                     originalLength: p.userData.length,
                                     originalPosition: p.position.clone(),
                                     originalQuaternion: p.quaternion.clone(),
-                                    editFace: editFace
+                                    editFace: determinedEditFace
                                 });
-                                createResizeIndicator(p, editFace);
+                                createResizeIndicator(p, determinedEditFace);
                             });
-                            
+
                             showStatus(`Length edit mode (${app.selectedPieces.size} pieces). Drag or type value.`);
+                            updateHotkeyGuide();
                         } else {
                             showStatus('Click an end-face (along length) to adjust length with V.', true);
                         }
-                    } else if (app.keys['e']) {
-                        duplicatePiece(clickedPiece);
+                    } else if (app.keys['e']) { // Duplicate piece (E key + Click)
+                        duplicatePiece(clickedPiece); // Assumes duplicatePiece handles selection update
                     } else if (app.movementState.axis && app.selectedPieces.has(clickedPiece)) {
-                        // Start axis-constrained drag
+                        // Start axis-constrained drag if an axis key (X, C, Z) is already held
+                        // and the clicked piece is part of the selection.
                         startMovement('drag', app.movementState.axis);
                         app.movementState.isDragging = true;
                     } else {
-                        // Selection logic
-                        if (event.ctrlKey) {
+                        // --- SELECTION LOGIC & FREE DRAG START ---
+                        if (event.ctrlKey) { // Ctrl + Click for multi-select
                             if (app.selectedPieces.has(clickedPiece)) {
                                 app.selectedPieces.delete(clickedPiece);
                                 updatePieceSelection(clickedPiece, false);
@@ -1941,13 +2007,17 @@
                                 app.selectedPieces.add(clickedPiece);
                                 updatePieceSelection(clickedPiece, true);
                             }
-                        } else {
+                        } else { // Standard click
                             if (!app.selectedPieces.has(clickedPiece)) {
+                                // If clicked piece is not selected, clear current selection and select it
                                 clearSelection();
                                 app.selectedPieces.add(clickedPiece);
                                 updatePieceSelection(clickedPiece, true);
                             }
-                            // Start free drag
+                            // If the clicked piece is already selected (or just got selected), start free drag.
+                            // This allows dragging a single already-selected piece without deselecting others if it's part of a group.
+                            // However, if you want single click to ALWAYS select ONLY the clicked piece and start drag:
+                            // clearSelection(); app.selectedPieces.add(clickedPiece); updatePieceSelection(clickedPiece, true);
                             startMovement('drag', 'free');
                             app.movementState.isDragging = true;
                         }
@@ -1955,14 +2025,17 @@
                         updateInfoPanel();
                     }
                 } else if (!event.ctrlKey && !app.movementState.axis) {
+                    // Clicked on empty space (no piece intersected)
+                    // and not holding Ctrl (for multi-select)
+                    // and not in an axis-movement mode (X,C,Z keys)
                     clearSelection();
                     updateHotkeyGuide();
                     updateInfoPanel();
                 }
-            } else if (event.button === 2) {
+            } else if (event.button === 2) { // Right mouse button
                 app.rightMouseDown = true;
             }
-            
+
             app.lastMouseX = event.clientX;
             app.lastMouseY = event.clientY;
             if (app.mouseDown || app.rightMouseDown) {
@@ -2037,7 +2110,6 @@
                     applyLengthChange(piece, newLength, editData);
                 });
                 
-                updateResizeIndicators();
                 updateInfoPanel();
             } else if (app.mouseDown && !app.movementState.axis) {
                 // Camera pan
@@ -2078,21 +2150,31 @@
                             piece.userData.length = piece.userData.currentPreviewLength;
                             delete piece.userData.currentPreviewLength;
                             
-                            // Recreate geometry with final length
-                            if (piece.geometry) piece.geometry.dispose();
+                            // Recreate geometry with final length for both mesh and outline
+                            const mesh = piece.getObjectByName('mesh');
+                            const outline = piece.getObjectByName('outline');
+                            
+                            if (mesh && mesh.geometry) mesh.geometry.dispose();
+                            if (outline && outline.geometry) outline.geometry.dispose();
+                            
                             const t = piece.userData.thickness / 1000;
                             const w = piece.userData.width / 1000;
                             const l = piece.userData.length / 1000;
-                            piece.geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
+                            const newGeometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
+                            
+                            if (mesh) mesh.geometry = newGeometry;
+                            if (outline) {
+                                const newEdges = new THREE.EdgesGeometry(newGeometry);
+                                outline.geometry = newEdges;
+                            }
                         }
                     });
                     
                     // Clear resize indicators
-                    app.resizeIndicators.forEach((indicator, piece) => removeResizeIndicator(piece));
+                    app.movementState.lengthEditData.pieces.forEach(piece => {
+                        removeResizeIndicator(piece);
+                    });
                     app.movementState.lengthEditData = null;
-                    
-                    // Update visual helpers to refresh selection outlines
-                    updateVisualHelpers();
                     
                     saveState();
                     saveCurrentProject();
@@ -2339,41 +2421,52 @@
         }
         
         function applyLengthChange(piece, newLengthMM, editData) {
-            const snappedLength = Math.round(newLengthMM / 5) * 5;
+            const snappedLength = Math.round(newLengthMM / 5) * 5; // Snap to nearest 5mm
             piece.userData.currentPreviewLength = snappedLength;
-            
-            // Update geometry
-            if (piece.geometry) piece.geometry.dispose();
+
+            const mesh = piece.getObjectByName('mesh');
+            const outline = piece.getObjectByName('outline');
+
+            if (mesh && mesh.geometry) mesh.geometry.dispose();
+            if (outline && outline.geometry) outline.geometry.dispose();
+
             const t = piece.userData.thickness / 1000;
             const w = piece.userData.width / 1000;
-            const l = snappedLength / 1000;
-            piece.geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
-            
-            // Adjust position based on which face is being edited
+            const l = snappedLength / 1000; // Use the new snapped preview length
+
+            const newGeometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
+            if (mesh) {
+                mesh.geometry = newGeometry;
+            }
+            if (outline) {
+                const newEdges = new THREE.EdgesGeometry(newGeometry);
+                outline.geometry = newEdges;
+            }
+
             const lengthChange = snappedLength - editData.originalLength;
-            const shiftDistance = lengthChange / 2000; // Half the change in meters
-            
+            const shiftDistance = lengthChange / 2000;
+
             const localShiftAxis = new THREE.Vector3(0, 0, editData.editFace === 'top' ? 1 : -1);
             const worldShift = localShiftAxis.clone()
                 .multiplyScalar(shiftDistance)
                 .applyQuaternion(editData.originalQuaternion);
-            
+
             piece.position.copy(editData.originalPosition).add(worldShift);
-            
-            // Floor constraint using centralized bounds system
-            piece.updateMatrixWorld(true);
+            piece.updateMatrixWorld(true); // IMPORTANT: Update matrix before bounds check
+
+            // Floor constraint
+            // With the fix in getAlignedBounds, 'bounds' will now use currentPreviewLength
             const bounds = GridSnapSystem.getAlignedBounds(piece);
-            if (bounds.min.z < 0) {
-                piece.position.z += -bounds.min.z;
-                piece.position.z = snapToGrid(piece.position.z);
+            if (bounds.min.z < -FLOAT_PRECISION) {
+                piece.position.z += (-bounds.min.z); // Shift entire piece up
+                // Optional: Snap Z to grid after floor correction
+                // piece.position.z = GridSnapSystem.snapToGrid(piece.position.z);
+                piece.updateMatrixWorld(true); // Update matrix again if position changed
             }
-            
-            // Update selection outline if this piece is selected
-            if (app.selectedPieces.has(piece)) {
-                removeSelectionOutline(piece);
-                createSelectionOutline(piece);
-            }
-            
+
+            // Refresh the resize indicator (as per previous fix)
+            createResizeIndicator(piece, editData.editFace);
+
             showMeasurement(`Length: ${snappedLength}mm`);
         }
         
@@ -2426,7 +2519,6 @@
                 showStatus("⚠️ Rotation caused collisions! Use Ctrl+Z to undo if needed.", true, 4000);
             }
 
-            updateVisualHelpers();
             saveState();
             saveCurrentProject();
             updateInfoPanel();
@@ -2435,21 +2527,19 @@
         }
 
         function duplicatePiece(original) {
-            const clone = original.clone();
-            clone.material = original.material.clone();
+            const clone = createUnifiedWoodPiece(
+                original.userData.thickness,
+                original.userData.width,
+                original.userData.length
+            );
             
-            // Create new unique ID for the duplicate
-            const pieceId = 'piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            clone.userData = { 
-                ...original.userData, 
-                geometryVersion: 1,
-                id: pieceId
-            };
+            // Copy position and rotation
+            clone.position.copy(original.position);
+            clone.quaternion.copy(original.quaternion);
             
             const offset = new THREE.Vector3(0.1, 0.1, 0.1);
             const preferredPosition = original.position.clone().add(offset);
             
-            app.scene.add(clone);
             GridSnapSystem.findSafePosition(clone, preferredPosition);
             
             clearSelection();
@@ -2471,9 +2561,22 @@
             saveState();
             app.selectedPieces.forEach(piece => {
                 app.scene.remove(piece);
-                if (piece.geometry) piece.geometry.dispose();
-                if (piece.material) piece.material.dispose();
-                removeSelectionOutline(piece);
+                
+                // Dispose of geometries and materials for both mesh and outline
+                const mesh = piece.getObjectByName('mesh');
+                const outline = piece.getObjectByName('outline');
+                
+                if (mesh) {
+                    if (mesh.geometry) mesh.geometry.dispose();
+                    if (mesh.material) mesh.material.dispose();
+                }
+                
+                if (outline) {
+                    if (outline.geometry) outline.geometry.dispose();
+                    if (outline.material) outline.material.dispose();
+                }
+                
+                // Clean up any resize indicators
                 removeResizeIndicator(piece);
             });
             
@@ -2493,17 +2596,8 @@
         }
 
         function updatePieceSelection(piece, selected) {
-            if (selected) {
-                createSelectionOutline(piece);
-            } else {
-                piece.material.color.setHex(0xB8956F);
-                removeSelectionOutline(piece);
-            }
-            
-            // Reapply collision color if needed
-            if (piece.userData.isColliding) {
-                piece.material.color.setHex(0xff4444);
-            }
+            piece.userData.isSelected = selected;
+            updatePieceAppearance(piece);
         }
         
         function showMeasurement(text) {
@@ -2590,8 +2684,6 @@
             if (app.currentProject) saveCurrentProject();
             
             clearSelection();
-            app.selectionOutlines.forEach(removeSelectionOutline);
-            app.resizeIndicators.forEach(removeResizeIndicator);
             
             const toRemove = [];
             app.scene.traverse((obj) => {
@@ -2599,39 +2691,33 @@
             });
             toRemove.forEach(obj => {
                 app.scene.remove(obj);
-                if (obj.geometry) obj.geometry.dispose();
-                if (obj.material) obj.material.dispose();
+                
+                // Properly dispose of integrated piece resources
+                const mesh = obj.getObjectByName('mesh');
+                const outline = obj.getObjectByName('outline');
+                
+                if (mesh) {
+                    if (mesh.geometry) mesh.geometry.dispose();
+                    if (mesh.material) mesh.material.dispose();
+                }
+                
+                if (outline) {
+                    if (outline.geometry) outline.geometry.dispose();
+                    if (outline.material) outline.material.dispose();
+                }
             });
             
             const project = app.projects[name];
             if (project && project.pieces) {
                 project.pieces.forEach(data => {
-                    const t = data.thickness / 1000;
-                    const w = data.width / 1000;
-                    const l = data.length / 1000;
-                    const geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
-                    const material = new THREE.MeshStandardMaterial({
-                        color: 0xB8956F,
-                        roughness: 0.6,
-                        metalness: 0.05
-                    });
-                    const piece = new THREE.Mesh(geometry, material);
-                    piece.castShadow = true;
-                    piece.receiveShadow = true;
+                    const piece = createUnifiedWoodPiece(data.thickness, data.width, data.length);
                     
                     // Ensure each loaded piece has a unique ID
                     const pieceId = data.id || ('piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
-                    piece.userData = {
-                        thickness: data.thickness,
-                        width: data.width,
-                        length: data.length,
-                        isWoodPiece: true,
-                        geometryVersion: 1,
-                        id: pieceId
-                    };
+                    piece.userData.id = pieceId;
+                    
                     piece.position.fromArray(data.position);
                     piece.quaternion.fromArray(data.rotation);
-                    app.scene.add(piece);
                 });
             }
             
@@ -2946,8 +3032,6 @@
         
         function restoreState(state) {
             clearSelection();
-            app.selectionOutlines.forEach(removeSelectionOutline);
-            app.resizeIndicators.forEach(removeResizeIndicator);
             
             const toRemove = [];
             app.scene.traverse((obj) => {
@@ -2955,36 +3039,30 @@
             });
             toRemove.forEach(obj => {
                 app.scene.remove(obj);
-                if (obj.geometry) obj.geometry.dispose();
-                if (obj.material) obj.material.dispose();
+                
+                // Properly dispose of integrated piece resources
+                const mesh = obj.getObjectByName('mesh');
+                const outline = obj.getObjectByName('outline');
+                
+                if (mesh) {
+                    if (mesh.geometry) mesh.geometry.dispose();
+                    if (mesh.material) mesh.material.dispose();
+                }
+                
+                if (outline) {
+                    if (outline.geometry) outline.geometry.dispose();
+                    if (outline.material) outline.material.dispose();
+                }
             });
             
             state.pieces.forEach(data => {
-                const t = data.thickness / 1000;
-                const w = data.width / 1000;
-                const l = data.length / 1000;
-                const geometry = createRoundedBoxGeometry(t, w, l, 0.003, 4);
-                const material = new THREE.MeshStandardMaterial({
-                    color: 0xB8956F,
-                    roughness: 0.6,
-                    metalness: 0.05
-                });
-                const piece = new THREE.Mesh(geometry, material);
-                piece.castShadow = true;
-                piece.receiveShadow = true;
+                const piece = createUnifiedWoodPiece(data.thickness, data.width, data.length);
                 
                 const pieceId = data.id || ('piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
-                piece.userData = {
-                    thickness: data.thickness,
-                    width: data.width,
-                    length: data.length,
-                    isWoodPiece: true,
-                    geometryVersion: 1,
-                    id: pieceId
-                };
+                piece.userData.id = pieceId;
+                
                 piece.position.fromArray(data.position);
                 piece.quaternion.fromArray(data.rotation);
-                app.scene.add(piece);
             });
             
             // Restore camera state
@@ -3080,28 +3158,6 @@
         
         function animate() {
             requestAnimationFrame(animate);
-            
-            // Update selection outlines to follow pieces
-            app.selectionOutlines.forEach((outline, piece) => {
-                outline.position.copy(piece.position);
-                outline.quaternion.copy(piece.quaternion);
-                outline.scale.copy(piece.scale);
-            });
-            
-            // Update resize indicators
-            app.resizeIndicators.forEach((indicator, piece) => {
-                const editData = app.movementState.lengthEditData?.pieceData.get(piece);
-                if (editData) {
-                    indicator.position.copy(piece.position);
-                    indicator.quaternion.copy(piece.quaternion);
-                    
-                    // Update offset for face
-                    const offsetFactor = 0.0015;
-                    const offsetVector = new THREE.Vector3(0, 0, editData.editFace === 'top' ? offsetFactor : -offsetFactor);
-                    offsetVector.applyQuaternion(piece.quaternion);
-                    indicator.position.add(offsetVector);
-                }
-            });
             
             // Update measurement position if visible
             if (!app.measurementElement.classList.contains('hidden') && app.selectedPieces.size > 0) {
