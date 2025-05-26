@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Wood Construction (Fixed Movement)</title>
+    <title>3D Wood Construction (Grid-Based Snapping)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -123,6 +123,8 @@
 
         .snap-indicator { position: fixed; background: rgba(76, 175, 80, 0.9); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; pointer-events: none; transition: opacity 0.2s; z-index: 1001; }
         .snap-indicator.hidden { opacity: 0; }
+        
+        .snap-preview { pointer-events: none; }
     </style>
 </head>
 <body>
@@ -150,7 +152,7 @@
                 <h3><i class="fas fa-cog"></i> Settings</h3>
                 <div class="settings-item">
                     <span class="settings-label">Grid Snap (G)</span>
-                    <div class="toggle-switch" id="gridToggle" onclick="app.toggleGridSnap()"></div>
+                    <div class="toggle-switch active" id="gridToggle" onclick="app.toggleGridSnap()"></div>
                 </div>
                 <div class="settings-item">
                     <span class="settings-label">Hotkey Guide</span>
@@ -250,11 +252,479 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Constants for collision and snapping
-        const COLLISION_TOLERANCE = 0.002; // 2mm - unified collision tolerance
-        const SNAP_TOLERANCE = 0.010; // 10mm - unified snap tolerance  
-        const GEOMETRY_PADDING = 0.003; // 3mm - padding for rounded geometry
+        // Constants
+        const GRID_SIZE = 10; // 10mm grid - all positions will snap to multiples of this
+        const FLOAT_PRECISION = 0.0001; // 0.1mm - floating point precision tolerance
         const MIN_PIECE_LENGTH = 0.010; // 10mm minimum length
+
+        // Grid-Based Collision and Snapping System
+        class GridSnapSystem {
+            static GRID_SIZE = GRID_SIZE / 1000; // Convert to meters
+            static FACE_SNAP_THRESHOLD = 0.020; // 20mm threshold for face snapping
+            
+            // Snap a value to the grid
+            static snapToGrid(value) {
+                return Math.round(value / this.GRID_SIZE) * this.GRID_SIZE;
+            }
+            
+            // Snap a vector to the grid
+            static snapVectorToGrid(vector) {
+                return new THREE.Vector3(
+                    this.snapToGrid(vector.x),
+                    this.snapToGrid(vector.y),
+                    this.snapToGrid(vector.z)
+                );
+            }
+            
+            // Get aligned bounds for a piece (bounds that align to grid)
+            static getAlignedBounds(piece) {
+                const { thickness, width, length } = piece.userData;
+                const t = thickness / 1000;
+                const w = width / 1000;
+                const l = length / 1000;
+                
+                // Create bounds in local space
+                const halfT = t / 2;
+                const halfW = w / 2;
+                const halfL = l / 2;
+                
+                const corners = [
+                    new THREE.Vector3(-halfT, -halfW, -halfL),
+                    new THREE.Vector3(halfT, -halfW, -halfL),
+                    new THREE.Vector3(-halfT, halfW, -halfL),
+                    new THREE.Vector3(halfT, halfW, -halfL),
+                    new THREE.Vector3(-halfT, -halfW, halfL),
+                    new THREE.Vector3(halfT, -halfW, halfL),
+                    new THREE.Vector3(-halfT, halfW, halfL),
+                    new THREE.Vector3(halfT, halfW, halfL)
+                ];
+                
+                // Transform to world space
+                const worldCorners = corners.map(corner => 
+                    corner.clone().applyMatrix4(piece.matrixWorld)
+                );
+                
+                return new THREE.Box3().setFromPoints(worldCorners);
+            }
+            
+            // Check if two bounds overlap (for collision detection)
+            static boundsOverlap(bounds1, bounds2) {
+                const tolerance = FLOAT_PRECISION; // 0.1mm
+                
+                // Check for actual overlap (pieces penetrating each other)
+                // Touching exactly (same face positions) should NOT be considered overlap
+                const xOverlap = bounds1.max.x > bounds2.min.x + tolerance && 
+                                bounds1.min.x < bounds2.max.x - tolerance;
+                const yOverlap = bounds1.max.y > bounds2.min.y + tolerance && 
+                                bounds1.min.y < bounds2.max.y - tolerance;
+                const zOverlap = bounds1.max.z > bounds2.min.z + tolerance && 
+                                bounds1.min.z < bounds2.max.z - tolerance;
+                
+                return xOverlap && yOverlap && zOverlap;
+            }
+            
+            // Find face-to-face snaps (the primary snapping mechanism)
+            static findFaceSnaps(movingBounds, staticBounds) {
+                const snaps = [];
+                const threshold = this.FACE_SNAP_THRESHOLD;
+                
+                // Check all 6 face pairs
+                const faceTests = [
+                    { axis: 'x', movingFace: 'min', staticFace: 'max' },
+                    { axis: 'x', movingFace: 'max', staticFace: 'min' },
+                    { axis: 'y', movingFace: 'min', staticFace: 'max' },
+                    { axis: 'y', movingFace: 'max', staticFace: 'min' },
+                    { axis: 'z', movingFace: 'min', staticFace: 'max' },
+                    { axis: 'z', movingFace: 'max', staticFace: 'min' }
+                ];
+                
+                for (const test of faceTests) {
+                    const movingFacePos = movingBounds[test.movingFace][test.axis];
+                    const staticFacePos = staticBounds[test.staticFace][test.axis];
+                    const distance = Math.abs(movingFacePos - staticFacePos);
+                    
+                    if (distance < threshold) {
+                        // Check if faces have overlapping area on other axes
+                        const axes = ['x', 'y', 'z'];
+                        const otherAxes = axes.filter(a => a !== test.axis);
+                        let hasOverlapArea = true;
+                        
+                        for (const axis of otherAxes) {
+                            const overlap = Math.min(movingBounds.max[axis], staticBounds.max[axis]) - 
+                                           Math.max(movingBounds.min[axis], staticBounds.min[axis]);
+                            if (overlap <= FLOAT_PRECISION) {
+                                hasOverlapArea = false;
+                                break;
+                            }
+                        }
+                        
+                        if (hasOverlapArea) {
+                            const snapOffset = staticFacePos - movingFacePos;
+                            snaps.push({
+                                axis: test.axis,
+                                offset: snapOffset,
+                                distance: distance,
+                                priority: 1 // Face snaps have highest priority
+                            });
+                        }
+                    }
+                }
+                
+                return snaps;
+            }
+            
+            // Apply snapping to a movement
+            // Fixed version that preserves face snaps and doesn't re-grid-snap them
+            static applySnapping(pieces, movement, startPositions) {
+            if (pieces.size === 0) return movement;
+
+            let snappedMovement = movement.clone();
+
+            // Find face snaps for all moving pieces
+            const staticPieces = app.scene.children.filter(
+                obj => obj.userData.isWoodPiece && !pieces.has(obj)
+            );
+
+            let bestSnap = null;
+            let bestSnapDistance = this.FACE_SNAP_THRESHOLD;
+
+            // Check each moving piece for potential snaps
+            pieces.forEach(movingPiece => {
+                const startPos = startPositions.get(movingPiece);
+                if (!startPos) return;
+                
+                // Create temporary piece at current movement position (don't grid-snap yet for face detection)
+                const tempPiece = movingPiece.clone();
+                tempPiece.position.copy(startPos).add(snappedMovement);
+                tempPiece.updateMatrixWorld(true);
+                
+                const movingBounds = this.getAlignedBounds(tempPiece);
+                
+                // Check against all static pieces
+                staticPieces.forEach(staticPiece => {
+                    staticPiece.updateMatrixWorld(true);
+                    const staticBounds = this.getAlignedBounds(staticPiece);
+                    
+                    const snaps = this.findFaceSnaps(movingBounds, staticBounds);
+                    
+                    // Find the best snap (shortest distance)
+                    snaps.forEach(snap => {
+                        if (snap.distance < bestSnapDistance) {
+                            bestSnap = snap;
+                            bestSnapDistance = snap.distance;
+                        }
+                    });
+                });
+            });
+
+            // Apply the best snap found - this creates perfect face-to-face contact
+            if (bestSnap) {
+                snappedMovement[bestSnap.axis] += bestSnap.offset;
+                
+                // DON'T re-snap to grid after face snapping - preserve the perfect contact
+                showSnapIndicator('Face snap');
+                
+                // Check floor constraint after face snap
+                let needsFloorSnap = false;
+                pieces.forEach(piece => {
+                    const startPos = startPositions.get(piece);
+                    if (!startPos) return;
+                    
+                    const tempPiece = piece.clone();
+                    tempPiece.position.copy(startPos).add(snappedMovement);
+                    tempPiece.updateMatrixWorld(true);
+                    
+                    const bounds = this.getAlignedBounds(tempPiece);
+                    if (bounds.min.z < -FLOAT_PRECISION) {
+                        const floorCorrection = -bounds.min.z;
+                        snappedMovement.z += floorCorrection;
+                        needsFloorSnap = true;
+                    }
+                });
+                
+                if (needsFloorSnap) {
+                    // Only snap Z to grid, preserve X,Y face contact
+                    snappedMovement.z = this.snapToGrid(snappedMovement.z);
+                }
+                
+                return snappedMovement;
+            }
+
+            // No face snap found, apply grid snapping
+            snappedMovement = this.snapVectorToGrid(snappedMovement);
+
+            // Check floor constraint
+            let needsFloorSnap = false;
+            pieces.forEach(piece => {
+                const startPos = startPositions.get(piece);
+                if (!startPos) return;
+                
+                const tempPiece = piece.clone();
+                tempPiece.position.copy(startPos).add(snappedMovement);
+                tempPiece.updateMatrixWorld(true);
+                
+                const bounds = this.getAlignedBounds(tempPiece);
+                if (bounds.min.z < -FLOAT_PRECISION) {
+                    const floorCorrection = -bounds.min.z;
+                    snappedMovement.z += floorCorrection;
+                    needsFloorSnap = true;
+                }
+            });
+
+            if (needsFloorSnap) {
+                snappedMovement = this.snapVectorToGrid(snappedMovement);
+                showSnapIndicator('Floor snap');
+            }
+
+            return snappedMovement;
+            }
+            
+            // Check for collisions
+            static checkCollisions(pieces, movement, startPositions) {
+                if (pieces.size === 0) return false;
+                
+                const staticPieces = app.scene.children.filter(
+                    obj => obj.userData.isWoodPiece && !pieces.has(obj)
+                );
+                
+                // Check each moving piece
+                for (const movingPiece of pieces) {
+                    const startPos = startPositions.get(movingPiece);
+                    if (!startPos) continue;
+                    
+                    const tempPiece = movingPiece.clone();
+                    tempPiece.position.copy(startPos).add(movement);
+                    tempPiece.updateMatrixWorld(true);
+                    
+                    const movingBounds = this.getAlignedBounds(tempPiece);
+                    
+                    // Check against static pieces
+                    for (const staticPiece of staticPieces) {
+                        staticPiece.updateMatrixWorld(true);
+                        const staticBounds = this.getAlignedBounds(staticPiece);
+                        
+                        if (this.boundsOverlap(movingBounds, staticBounds)) {
+                            return true;
+                        }
+                    }
+                    
+                    // Check against other moving pieces
+                    for (const otherMovingPiece of pieces) {
+                        if (otherMovingPiece === movingPiece) continue;
+                        
+                        const otherStartPos = startPositions.get(otherMovingPiece);
+                        if (!otherStartPos) continue;
+                        
+                        const otherTempPiece = otherMovingPiece.clone();
+                        otherTempPiece.position.copy(otherStartPos).add(movement);
+                        otherTempPiece.updateMatrixWorld(true);
+                        
+                        const otherBounds = this.getAlignedBounds(otherTempPiece);
+                        
+                        if (this.boundsOverlap(movingBounds, otherBounds)) {
+                            return true;
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            
+            // Find a safe position for a new piece
+            static findSafePosition(piece, preferredPosition, excludePieces = new Set()) {
+                const allPieces = app.scene.children.filter(obj => 
+                    obj.userData.isWoodPiece && obj !== piece && !excludePieces.has(obj)
+                );
+                
+                // Start with grid-snapped preferred position
+                piece.position.copy(this.snapVectorToGrid(preferredPosition));
+                piece.updateMatrixWorld(true);
+                
+                // Try to snap to existing pieces first
+                let snapped = false;
+                const pieceBounds = this.getAlignedBounds(piece);
+                
+                for (const existingPiece of allPieces) {
+                    existingPiece.updateMatrixWorld(true);
+                    const existingBounds = this.getAlignedBounds(existingPiece);
+                    
+                    const snaps = this.findFaceSnaps(pieceBounds, existingBounds);
+                    if (snaps.length > 0) {
+                        // Apply the first valid snap
+                        const snap = snaps[0];
+                        piece.position[snap.axis] += snap.offset;
+                        piece.position.copy(this.snapVectorToGrid(piece.position));
+                        piece.updateMatrixWorld(true);
+                        
+                        // Check if this position is collision-free
+                        const newBounds = this.getAlignedBounds(piece);
+                        let hasCollision = false;
+                        
+                        for (const otherPiece of allPieces) {
+                            if (otherPiece === existingPiece) continue;
+                            otherPiece.updateMatrixWorld(true);
+                            const otherBounds = this.getAlignedBounds(otherPiece);
+                            
+                            if (this.boundsOverlap(newBounds, otherBounds)) {
+                                hasCollision = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!hasCollision) {
+                            snapped = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // If snapping didn't work, find an empty grid position
+                if (!snapped) {
+                    const gridStep = this.GRID_SIZE;
+                    const maxAttempts = 50;
+                    
+                    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                        const pieceBounds = this.getAlignedBounds(piece);
+                        let hasCollision = false;
+                        
+                        for (const otherPiece of allPieces) {
+                            otherPiece.updateMatrixWorld(true);
+                            const otherBounds = this.getAlignedBounds(otherPiece);
+                            
+                            if (this.boundsOverlap(pieceBounds, otherBounds)) {
+                                hasCollision = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!hasCollision) break;
+                        
+                        // Try next position in expanding spiral
+                        const angle = (attempt * 0.5) * Math.PI;
+                        const radius = gridStep * (1 + Math.floor(attempt / 8));
+                        piece.position.x = this.snapToGrid(preferredPosition.x + Math.cos(angle) * radius);
+                        piece.position.y = this.snapToGrid(preferredPosition.y + Math.sin(angle) * radius);
+                        piece.updateMatrixWorld(true);
+                    }
+                }
+                
+                // Ensure piece is on or above floor
+                const finalBounds = this.getAlignedBounds(piece);
+                if (finalBounds.min.z < 0) {
+                    piece.position.z -= finalBounds.min.z;
+                    piece.position.z = this.snapToGrid(piece.position.z);
+                }
+                
+                return true;
+            }
+            
+            // Check scene for any collisions
+            static checkSceneCollisions(excludePieces = new Set()) {
+                const pieces = app.scene.children.filter(obj => 
+                    obj.userData.isWoodPiece && !excludePieces.has(obj)
+                );
+                
+                const collisions = new Set();
+                
+                for (let i = 0; i < pieces.length; i++) {
+                    for (let j = i + 1; j < pieces.length; j++) {
+                        const piece1 = pieces[i];
+                        const piece2 = pieces[j];
+                        
+                        piece1.updateMatrixWorld(true);
+                        piece2.updateMatrixWorld(true);
+                        
+                        const bounds1 = this.getAlignedBounds(piece1);
+                        const bounds2 = this.getAlignedBounds(piece2);
+                        
+                        if (this.boundsOverlap(bounds1, bounds2)) {
+                            collisions.add(piece1);
+                            collisions.add(piece2);
+                        }
+                    }
+                }
+                
+                return collisions;
+            }
+            // New helper function to find maximum movement distance without collision
+            static findMaxMovementWithoutCollision(pieces, desiredMovement, startPositions) {
+                if (pieces.size === 0 || desiredMovement.lengthSq() < 0.000001) {
+                    return desiredMovement;
+                }
+                
+                const staticPieces = app.scene.children.filter(
+                    obj => obj.userData.isWoodPiece && !pieces.has(obj)
+                );
+                
+                // Binary search for maximum movement distance
+                let minScale = 0;
+                let maxScale = 1;
+                let bestScale = 0;
+                const iterations = 20; // Precision iterations
+                
+                for (let i = 0; i < iterations; i++) {
+                    const testScale = (minScale + maxScale) / 2;
+                    const testMovement = desiredMovement.clone().multiplyScalar(testScale);
+                    
+                    let hasCollision = false;
+                    
+                    // Test all moving pieces at this movement scale
+                    for (const movingPiece of pieces) {
+                        const startPos = startPositions.get(movingPiece);
+                        if (!startPos) continue;
+                        
+                        const tempPiece = movingPiece.clone();
+                        tempPiece.position.copy(startPos).add(testMovement);
+                        tempPiece.updateMatrixWorld(true);
+                        
+                        const movingBounds = this.getAlignedBounds(tempPiece);
+                        
+                        // Check against static pieces
+                        for (const staticPiece of staticPieces) {
+                            staticPiece.updateMatrixWorld(true);
+                            const staticBounds = this.getAlignedBounds(staticPiece);
+                            
+                            if (this.boundsOverlap(movingBounds, staticBounds)) {
+                                hasCollision = true;
+                                break;
+                            }
+                        }
+                        
+                        if (hasCollision) break;
+                        
+                        // Check against other moving pieces
+                        for (const otherMovingPiece of pieces) {
+                            if (otherMovingPiece === movingPiece) continue;
+                            
+                            const otherStartPos = startPositions.get(otherMovingPiece);
+                            if (!otherStartPos) continue;
+                            
+                            const otherTempPiece = otherMovingPiece.clone();
+                            otherTempPiece.position.copy(otherStartPos).add(testMovement);
+                            otherTempPiece.updateMatrixWorld(true);
+                            
+                            const otherBounds = this.getAlignedBounds(otherTempPiece);
+                            
+                            if (this.boundsOverlap(movingBounds, otherBounds)) {
+                                hasCollision = true;
+                                break;
+                            }
+                        }
+                        
+                        if (hasCollision) break;
+                    }
+                    
+                    if (hasCollision) {
+                        maxScale = testScale;
+                    } else {
+                        bestScale = testScale;
+                        minScale = testScale;
+                    }
+                }
+                
+                return desiredMovement.clone().multiplyScalar(bestScale);
+            }
+        }
 
         // Global app object
         const app = {
@@ -289,6 +759,7 @@
             // Visual helpers
             selectionOutlines: new Map(), 
             resizeIndicators: new Map(), 
+            snapGhosts: new Map(),
             
             // Input state
             keys: {},
@@ -298,7 +769,7 @@
             lastMouseY: 0,
             
             // Grid snap
-            gridSize: 10, 
+            gridSize: GRID_SIZE, 
             gridSnapEnabled: true,
             hotkeyGuideEnabled: true,
             settingsPanelExpanded: false,
@@ -373,15 +844,13 @@
                     const startPos = startPositions.get(piece);
                     if (!startPos) return;
                     
-                    const newPos = startPos.clone().add(constrainedMovement);
                     const tempPiece = piece.clone();
-                    tempPiece.position.copy(newPos);
+                    tempPiece.position.copy(startPos).add(constrainedMovement);
                     tempPiece.updateMatrixWorld(true);
                     
-                    // Use logical bounding box for floor constraint
-                    const box = getLogicalBoundingBox(tempPiece);
-                    if (box.min.z < 0) {
-                        minZCorrection = Math.max(minZCorrection, -box.min.z);
+                    const bounds = GridSnapSystem.getAlignedBounds(tempPiece);
+                    if (bounds.min.z < 0) {
+                        minZCorrection = Math.max(minZCorrection, -bounds.min.z);
                     }
                 });
                 
@@ -398,13 +867,14 @@
                 super('collision');
             }
             
+            // Fixed collision constraint that allows movement up to contact point
             apply(pieces, movement, startPositions, mode) {
                 // Only check collisions if there's meaningful movement
                 if (movement.lengthSq() < 0.000001) return movement;
                 
                 // During dragging, allow movement but track collision state
                 if (mode === 'drag') {
-                    const hasCollisions = this.checkForCollisions(pieces, movement, startPositions);
+                    const hasCollisions = GridSnapSystem.checkCollisions(pieces, movement, startPositions);
                     app.movementState.hasCollisions = hasCollisions;
                     if (hasCollisions) {
                         showStatus('⚠️ Collision detected - will snap on release', true, 1000);
@@ -412,75 +882,22 @@
                     return movement; // Always allow movement during dragging
                 }
                 
-                // For non-dragging modes (typed, step), still prevent collision
-                const hasCollisions = this.checkForCollisions(pieces, movement, startPositions);
-                if (hasCollisions) {
-                    return new THREE.Vector3(); // Block movement for typed/step modes
-                }
+                // For non-dragging modes, find maximum movement without collision
+                const maxMovement = GridSnapSystem.findMaxMovementWithoutCollision(pieces, movement, startPositions);
                 
-                return movement;
-            }
-            
-            checkForCollisions(pieces, movement, startPositions) {
-                // Get all pieces that are NOT currently being moved
-                const staticPieces = app.scene.children.filter(
-                    obj => obj.userData.isWoodPiece && !pieces.has(obj)
-                );
-                
-                // Create test boxes for moving pieces at their new positions
-                const testBoxes = [];
-                pieces.forEach(piece => {
-                    const startPos = startPositions.get(piece);
-                    if (!startPos) return;
+                // If we couldn't move the full distance, show why
+                if (maxMovement.lengthSq() < movement.lengthSq() * 0.99) {
+                    const movedDistance = Math.sqrt(maxMovement.lengthSq()) * 1000; // Convert to mm
+                    const requestedDistance = Math.sqrt(movement.lengthSq()) * 1000;
                     
-                    const newPos = startPos.clone().add(movement);
-                    const tempPiece = piece.clone();
-                    tempPiece.position.copy(newPos);
-                    tempPiece.updateMatrixWorld(true);
-                    
-                    // Use logical bounding box with small collision tolerance
-                    const box = getLogicalBoundingBox(tempPiece);
-                    box.expandByScalar(-COLLISION_TOLERANCE);
-                    testBoxes.push({ box, piece, originalPiece: piece });
-                });
-                
-                // Check for collisions
-                for (let i = 0; i < testBoxes.length; i++) {
-                    const { box: movingBox, piece: movingPiece, originalPiece } = testBoxes[i];
-                    
-                    // Check against static pieces (pieces not being moved)
-                    for (const staticPiece of staticPieces) {
-                        // Explicit check to ensure we're not comparing a piece to itself
-                        if (originalPiece === staticPiece) {
-                            console.warn('Attempted self-collision check in static pieces - this should not happen!');
-                            continue;
-                        }
-                        
-                        const staticBox = getLogicalBoundingBox(staticPiece);
-                        staticBox.expandByScalar(-COLLISION_TOLERANCE);
-                        
-                        if (boxesOverlap(movingBox, staticBox, COLLISION_TOLERANCE)) {
-                            return true; // Collision detected
-                        }
-                    }
-                    
-                    // Check against other moving pieces (but not the same piece)
-                    for (let j = i + 1; j < testBoxes.length; j++) {
-                        const { box: otherMovingBox, piece: otherMovingPiece, originalPiece: otherOriginalPiece } = testBoxes[j];
-                        
-                        // Explicit check to ensure we're not comparing a piece to itself
-                        if (originalPiece === otherOriginalPiece) {
-                            console.warn('Attempted self-collision check in moving pieces - this should not happen!');
-                            continue;
-                        }
-                        
-                        if (boxesOverlap(movingBox, otherMovingBox, COLLISION_TOLERANCE)) {
-                            return true; // Collision detected
-                        }
+                    if (movedDistance < 1) { // Less than 1mm movement possible
+                        showStatus('⚠️ Movement blocked - pieces would collide!', true, 2000);
+                    } else {
+                        showStatus(`Moved ${movedDistance.toFixed(0)}mm (${requestedDistance.toFixed(0)}mm requested)`, false, 2000);
                     }
                 }
                 
-                return false; // No collisions
+                return maxMovement;
             }
         }
         
@@ -490,153 +907,16 @@
             }
             
             apply(pieces, movement, startPositions, mode) {
-                if (!app.gridSnapEnabled && pieces.size === 0) return movement;
-                
-                let snappedMovement = movement.clone();
-                let snapInfo = null;
-                let bestSnapDistance = SNAP_TOLERANCE;
-                
-                const staticPieces = app.scene.children.filter(
-                    obj => obj.userData.isWoodPiece && !pieces.has(obj)
-                );
-                
-                pieces.forEach(movingPiece => {
-                    const startPos = startPositions.get(movingPiece);
-                    if (!startPos) return;
-                    
-                    const tempPiece = movingPiece.clone();
-                    tempPiece.position.copy(startPos).add(snappedMovement);
-                    tempPiece.updateMatrixWorld(true);
-                    
-                    // Use logical bounding box for perfect rectangular snapping
-                    const movingBox = getLogicalBoundingBox(tempPiece);
-                    
-                    // Floor snap - use logical geometry for perfect floor contact
-                    if (Math.abs(movingBox.min.z) < bestSnapDistance) {
-                        const snapOffset = -movingBox.min.z;
-                        snappedMovement.z = movement.z + snapOffset;
-                        snapInfo = { type: 'floor', distance: Math.abs(movingBox.min.z * 1000) };
-                        bestSnapDistance = Math.abs(snapOffset);
-                    }
-                    
-                    // Object snapping - use logical geometry for perfect touching
-                    staticPieces.forEach(staticPiece => {
-                        const staticBox = getLogicalBoundingBox(staticPiece);
-                        
-                        // Test each face for snapping using logical geometry for perfect touch
-                        const tests = [
-                            { face: 'minX', axis: 'x', movingVal: () => movingBox.min.x, staticVal: () => staticBox.max.x },
-                            { face: 'maxX', axis: 'x', movingVal: () => movingBox.max.x, staticVal: () => staticBox.min.x },
-                            { face: 'minY', axis: 'y', movingVal: () => movingBox.min.y, staticVal: () => staticBox.max.y },
-                            { face: 'maxY', axis: 'y', movingVal: () => movingBox.max.y, staticVal: () => staticBox.min.y },
-                            { face: 'minZ', axis: 'z', movingVal: () => movingBox.min.z, staticVal: () => staticBox.max.z },
-                            { face: 'maxZ', axis: 'z', movingVal: () => movingBox.max.z, staticVal: () => staticBox.min.z }
-                        ];
-                        
-                        tests.forEach(test => {
-                            const dist = Math.abs(test.movingVal() - test.staticVal());
-                            
-                            if (dist < bestSnapDistance) {
-                                // Check if faces would overlap on other axes using logical boxes with collision tolerance
-                                const movingBoxCollision = getLogicalBoundingBox(tempPiece);
-                                const staticBoxCollision = getLogicalBoundingBox(staticPiece);
-                                movingBoxCollision.expandByScalar(-COLLISION_TOLERANCE);
-                                staticBoxCollision.expandByScalar(-COLLISION_TOLERANCE);
-                                
-                                const otherAxes = ['x', 'y', 'z'].filter(a => a !== test.axis);
-                                let canSnap = true;
-                                
-                                for (const axis of otherAxes) {
-                                    const movingMin = movingBoxCollision.min[axis];
-                                    const movingMax = movingBoxCollision.max[axis];
-                                    const staticMin = staticBoxCollision.min[axis];
-                                    const staticMax = staticBoxCollision.max[axis];
-                                    
-                                    const overlap = Math.min(movingMax, staticMax) - Math.max(movingMin, staticMin);
-                                    if (overlap <= 0) {
-                                        canSnap = false;
-                                        break;
-                                    }
-                                }
-                                
-                                if (canSnap) {
-                                    // Calculate snap offset using logical geometry for perfect touch (no gap)
-                                    const snapOffset = test.staticVal() - test.movingVal();
-                                    snappedMovement[test.axis] = movement[test.axis] + snapOffset;
-                                    snapInfo = { type: 'object', face: test.face, distance: dist * 1000 };
-                                    bestSnapDistance = dist;
-                                }
-                            }
-                        });
-                    });
-                });
-                
-                // Show snap indicator if snapping occurred
-                if (snapInfo) {
-                    showSnapIndicator(snapInfo);
-                }
-                
-                // Apply grid snapping last
-                if (app.gridSnapEnabled) {
-                    snappedMovement = snapVectorToGrid(snappedMovement);
-                }
-                
-                return snappedMovement;
+                // Apply grid-based snapping
+                return GridSnapSystem.applySnapping(pieces, movement, startPositions);
             }
-        }
-        
-        function boxesOverlap(box1, box2, tolerance = 0) {
-            return (
-                box1.min.x <= box2.max.x + tolerance &&
-                box1.max.x >= box2.min.x - tolerance &&
-                box1.min.y <= box2.max.y + tolerance &&
-                box1.max.y >= box2.min.y - tolerance &&
-                box1.min.z <= box2.max.z + tolerance &&
-                box1.max.z >= box2.min.z - tolerance
-            );
-        }
-        
-        // Get logical bounding box treating pieces as perfect rectangles
-        function getLogicalBoundingBox(piece) {
-            const { thickness, width, length } = piece.userData;
-            const t = thickness / 1000;
-            const w = width / 1000;
-            const l = length / 1000;
-            
-            // Create perfect rectangular bounds in local space
-            const halfT = t / 2;
-            const halfW = w / 2;
-            const halfL = l / 2;
-            
-            // Transform to world space
-            const corners = [
-                new THREE.Vector3(-halfT, -halfW, -halfL),
-                new THREE.Vector3(halfT, -halfW, -halfL),
-                new THREE.Vector3(-halfT, halfW, -halfL),
-                new THREE.Vector3(halfT, halfW, -halfL),
-                new THREE.Vector3(-halfT, -halfW, halfL),
-                new THREE.Vector3(halfT, -halfW, halfL),
-                new THREE.Vector3(-halfT, halfW, halfL),
-                new THREE.Vector3(halfT, halfW, halfL)
-            ];
-            
-            // Transform corners to world space
-            const worldCorners = corners.map(corner => {
-                return corner.clone().applyMatrix4(piece.matrixWorld);
-            });
-            
-            // Create bounding box from transformed corners
-            const box = new THREE.Box3();
-            box.setFromPoints(worldCorners);
-            
-            return box;
         }
         
         function unifiedMove(pieces, desiredMovement, mode = 'drag') {
             if (pieces.size === 0) return true;
             
             // Use different thresholds based on mode
-            const movementThreshold = mode === 'drag' ? 0.0001 : 0.000001; // 0.1mm for drag, 0.001mm for typed/step
+            const movementThreshold = mode === 'drag' ? 0.0001 : 0.000001;
             if (desiredMovement.lengthSq() < movementThreshold) return true;
             
             // Initialize movement state if needed
@@ -660,6 +940,11 @@
             constraints.forEach(constraint => {
                 finalMovement = constraint.apply(pieces, finalMovement, app.movementState.startPositions, mode);
             });
+            
+            // Show snap preview during drag mode
+            if (mode === 'drag') {
+                showSnapPreview(pieces, finalMovement);
+            }
             
             // For drag mode, always allow movement even if there are collisions
             if (mode === 'drag') {
@@ -722,6 +1007,40 @@
             return true;
         }
         
+        function showSnapPreview(pieces, offset) {
+            hideSnapPreview();
+            
+            pieces.forEach(piece => {
+                // Create wireframe ghost
+                const edges = new THREE.EdgesGeometry(piece.geometry);
+                const lineMaterial = new THREE.LineDashedMaterial({ 
+                    color: 0x4fc3f7, 
+                    linewidth: 1,
+                    dashSize: 0.02,
+                    gapSize: 0.01,
+                    opacity: 0.5,
+                    transparent: true
+                });
+                const ghost = new THREE.LineSegments(edges, lineMaterial);
+                ghost.position.copy(piece.position).add(offset);
+                ghost.quaternion.copy(piece.quaternion);
+                ghost.scale.copy(piece.scale);
+                ghost.userData.isSnapPreview = true;
+                
+                app.scene.add(ghost);
+                app.snapGhosts.set(piece, ghost);
+            });
+        }
+        
+        function hideSnapPreview() {
+            app.snapGhosts.forEach(ghost => {
+                app.scene.remove(ghost);
+                if (ghost.geometry) ghost.geometry.dispose();
+                if (ghost.material) ghost.material.dispose();
+            });
+            app.snapGhosts.clear();
+        }
+        
         function startMovement(mode, axis = null) {
             app.movementState.active = true;
             app.movementState.mode = mode;
@@ -756,7 +1075,6 @@
             }
             
             // Clear any collision warnings when starting movement
-            // This prevents "sticky" collision states
             app.selectedPieces.forEach(piece => {
                 piece.userData.isColliding = false;
                 if (!app.selectedPieces.has(piece)) {
@@ -772,6 +1090,8 @@
         }
         
         function endMovement(save = true) {
+            hideSnapPreview();
+            
             if (app.movementState.active && save) {
                 const movedDistance = app.movementState.currentOffset.lengthSq();
                 if (movedDistance > 0.000001) {
@@ -819,60 +1139,15 @@
         
         function findSafePositionsForPieces(pieces) {
             const safePositions = new Map();
-            const maxAttempts = 20;
             
             pieces.forEach(piece => {
                 const originalPosition = piece.position.clone();
-                let foundSafe = false;
                 
-                // Try positions in expanding circles around current position
-                for (let attempt = 0; attempt < maxAttempts && !foundSafe; attempt++) {
-                    const angle = (attempt * 0.5) * Math.PI;
-                    const radius = 0.01 + (attempt * 0.005); // Start at 1cm, increase by 0.5cm each attempt
-                    
-                    const testPosition = originalPosition.clone();
-                    testPosition.x += Math.cos(angle) * radius;
-                    testPosition.y += Math.sin(angle) * radius;
-                    testPosition.copy(snapVectorToGrid(testPosition));
-                    
-                    // Test this position
-                    piece.position.copy(testPosition);
-                    piece.updateMatrixWorld(true);
-                    
-                    // Apply floor constraint using logical bounding box
-                    const box = getLogicalBoundingBox(piece);
-                    if (box.min.z < 0) {
-                        testPosition.z += -box.min.z;
-                        testPosition.z = snapToGrid(testPosition.z);
-                        piece.position.copy(testPosition);
-                        piece.updateMatrixWorld(true);
-                    }
-                    
-                    // Check for collisions with other pieces using logical bounding boxes
-                    const pieceBox = getLogicalBoundingBox(piece);
-                    pieceBox.expandByScalar(-COLLISION_TOLERANCE);
-                    
-                    let hasCollision = false;
-                    const allPieces = app.scene.children.filter(obj => obj.userData.isWoodPiece && obj !== piece);
-                    
-                    for (const otherPiece of allPieces) {
-                        const otherBox = getLogicalBoundingBox(otherPiece);
-                        otherBox.expandByScalar(-COLLISION_TOLERANCE);
-                        
-                        if (boxesOverlap(pieceBox, otherBox, COLLISION_TOLERANCE)) {
-                            hasCollision = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!hasCollision) {
-                        safePositions.set(piece, testPosition.clone());
-                        foundSafe = true;
-                    }
-                }
-                
-                // If no safe position found, keep original position
-                if (!foundSafe) {
+                // Try to find a safe position
+                if (GridSnapSystem.findSafePosition(piece, originalPosition, pieces)) {
+                    safePositions.set(piece, piece.position.clone());
+                } else {
+                    // If no safe position found, restore original
                     piece.position.copy(originalPosition);
                 }
             });
@@ -931,23 +1206,25 @@
         }
         
         function snapToGrid(value) {
-            if (!app.gridSnapEnabled) return value;
-            return Math.round(value * 1000 / app.gridSize) * app.gridSize / 1000;
+            return GridSnapSystem.snapToGrid(value);
         }
         
         function snapVectorToGrid(vector) {
-            if (!app.gridSnapEnabled) return vector.clone();
-            return new THREE.Vector3(
-                snapToGrid(vector.x),
-                snapToGrid(vector.y),
-                snapToGrid(vector.z)
-            );
+            return GridSnapSystem.snapVectorToGrid(vector);
         }
         
         app.toggleGridSnap = function() {
             app.gridSnapEnabled = !app.gridSnapEnabled;
             document.getElementById('gridToggle').classList.toggle('active', app.gridSnapEnabled);
-            showStatus(`Grid snap ${app.gridSnapEnabled ? 'enabled' : 'disabled'}`);
+            
+            // Grid snap is always enabled in this system
+            if (!app.gridSnapEnabled) {
+                app.gridSnapEnabled = true;
+                document.getElementById('gridToggle').classList.add('active');
+                showStatus('Grid snap is required for proper alignment', true, 3000);
+            } else {
+                showStatus('Grid snap enabled');
+            }
             
             // Save grid snap setting
             try {
@@ -1242,14 +1519,8 @@
             app.statusTimeout = setTimeout(() => status.classList.add('hidden'), duration);
         }
         
-        function showSnapIndicator(snapInfo) {
+        function showSnapIndicator(text) {
             const indicator = document.getElementById('snapIndicator');
-            let text = '';
-            if (snapInfo.type === 'floor') {
-                text = '⌊ Floor Snap';
-            } else if (snapInfo.type === 'object') {
-                text = '⊞ Object Snap';
-            }
             indicator.textContent = text;
             indicator.classList.remove('hidden');
             
@@ -1270,99 +1541,23 @@
             indicator.classList.add('hidden');
         }
         
-        function findNonOverlappingPosition(piece, preferredPosition, maxAttempts = 50) {
-            const allPieces = Array.from(app.scene.children.filter(obj => obj.userData.isWoodPiece && obj !== piece));
-            
-            piece.position.copy(preferredPosition);
-            piece.updateMatrixWorld(true);
-            
-            let foundPosition = false;
-            let attempts = 0;
-            
-            while (!foundPosition && attempts < maxAttempts) {
-                const pieceBox = getLogicalBoundingBox(piece);
-                pieceBox.expandByScalar(-COLLISION_TOLERANCE);
-                
-                let hasOverlap = false;
-                for (const otherPiece of allPieces) {
-                    const otherBox = getLogicalBoundingBox(otherPiece);
-                    otherBox.expandByScalar(-COLLISION_TOLERANCE);
-                    
-                    if (boxesOverlap(pieceBox, otherBox, COLLISION_TOLERANCE)) {
-                        hasOverlap = true;
-                        break;
-                    }
-                }
-                
-                if (!hasOverlap) {
-                    foundPosition = true;
-                } else {
-                    const angle = (attempts * 0.5) * Math.PI;
-                    const radius = 0.05 + (attempts * 0.02); 
-                    piece.position.x = preferredPosition.x + Math.cos(angle) * radius;
-                    piece.position.y = preferredPosition.y + Math.sin(angle) * radius;
-                    piece.position.copy(snapVectorToGrid(piece.position));
-                    piece.updateMatrixWorld(true);
-                    attempts++;
-                }
-            }
-            
-            // Final floor constraint using logical bounding box
-            piece.updateMatrixWorld(true);
-            const finalBox = getLogicalBoundingBox(piece);
-            if (finalBox.min.z < 0) {
-                piece.position.z += -finalBox.min.z;
-                piece.position.z = snapToGrid(piece.position.z);
-            }
-            
-            return foundPosition;
-        }
-        
         function checkCollisions() {
-            const pieces = Array.from(app.scene.children.filter(obj => obj.userData.isWoodPiece));
+            const collisions = GridSnapSystem.checkSceneCollisions();
             
             // Reset all pieces to normal color and collision state
-            pieces.forEach(piece => {
+            const allPieces = app.scene.children.filter(obj => obj.userData.isWoodPiece);
+            allPieces.forEach(piece => {
                 piece.userData.isColliding = false;
                 if (!app.selectedPieces.has(piece)) {
                     piece.material.color.setHex(0xB8956F);
                 }
             });
             
-            // Check for collisions between different pieces
-            // Using i, j+1 pattern ensures we never check a piece against itself
-            for (let i = 0; i < pieces.length; i++) {
-                for (let j = i + 1; j < pieces.length; j++) {
-                    const piece1 = pieces[i];
-                    const piece2 = pieces[j];
-                    
-                    // Additional safety check - should never happen with i,j+1 pattern
-                    if (piece1 === piece2) {
-                        console.warn('Self-collision check detected - this should not happen!');
-                        continue;
-                    }
-                    
-                    // Ensure both pieces exist and have valid userData
-                    if (!piece1.userData.isWoodPiece || !piece2.userData.isWoodPiece) {
-                        continue;
-                    }
-                    
-                    // Use logical bounding boxes with collision tolerance
-                    const box1 = getLogicalBoundingBox(piece1);
-                    const box2 = getLogicalBoundingBox(piece2);
-                    
-                    // Account for collision tolerance
-                    box1.expandByScalar(-COLLISION_TOLERANCE);
-                    box2.expandByScalar(-COLLISION_TOLERANCE);
-                    
-                    if (boxesOverlap(box1, box2, COLLISION_TOLERANCE)) {
-                        piece1.userData.isColliding = true;
-                        piece2.userData.isColliding = true;
-                        piece1.material.color.setHex(0xff4444);
-                        piece2.material.color.setHex(0xff4444);
-                    }
-                }
-            }
+            // Apply collision coloring
+            collisions.forEach(piece => {
+                piece.userData.isColliding = true;
+                piece.material.color.setHex(0xff4444);
+            });
             
             updateInfoPanel();
         }
@@ -1374,9 +1569,10 @@
             const costPerMeter = calculateLumberCost(thickness, width);
             const cost = costPerMeter * (length / 1000);
             
-            // Use logical bounding box for height calculation
-            const box = getLogicalBoundingBox(piece);
-            const heightAboveFloor = Math.max(0, box.min.z * 1000);
+            // Use centralized bounds calculation for height
+            piece.updateMatrixWorld(true);
+            const bounds = GridSnapSystem.getAlignedBounds(piece);
+            const heightAboveFloor = Math.max(0, bounds.min.z * 1000);
             
             return { 
                 dimensions: `${thickness}×${width}×${length}mm`, 
@@ -1642,9 +1838,7 @@
             );
             
             app.scene.add(piece);
-            if (!findNonOverlappingPosition(piece, preferredPosition)) {
-                showStatus('No space found - placed with offset', true);
-            }
+            GridSnapSystem.findSafePosition(piece, preferredPosition);
             
             clearSelection();
             app.selectedPieces.add(piece);
@@ -2166,11 +2360,11 @@
             
             piece.position.copy(editData.originalPosition).add(worldShift);
             
-            // Floor constraint using logical bounding box
+            // Floor constraint using centralized bounds system
             piece.updateMatrixWorld(true);
-            const box = getLogicalBoundingBox(piece);
-            if (box.min.z < 0) {
-                piece.position.z += -box.min.z;
+            const bounds = GridSnapSystem.getAlignedBounds(piece);
+            if (bounds.min.z < 0) {
+                piece.position.z += -bounds.min.z;
                 piece.position.z = snapToGrid(piece.position.z);
             }
             
@@ -2210,12 +2404,12 @@
                     piece.position.copy(center).add(offset);
                 }
                 
-                // Snap to grid and apply floor constraint using logical bounding box
+                // Snap to grid and apply floor constraint using centralized bounds system
                 piece.position.copy(snapVectorToGrid(piece.position));
                 piece.updateMatrixWorld(true);
-                const box = getLogicalBoundingBox(piece);
-                if (box.min.z < 0) {
-                    piece.position.z += -box.min.z;
+                const bounds = GridSnapSystem.getAlignedBounds(piece);
+                if (bounds.min.z < 0) {
+                    piece.position.z += -bounds.min.z;
                     piece.position.z = snapToGrid(piece.position.z);
                 }
             });
@@ -2254,12 +2448,9 @@
             
             const offset = new THREE.Vector3(0.1, 0.1, 0.1);
             const preferredPosition = original.position.clone().add(offset);
-            preferredPosition.copy(snapVectorToGrid(preferredPosition));
             
             app.scene.add(clone);
-            if (!findNonOverlappingPosition(clone, preferredPosition)) {
-                showStatus('Duplicated with offset - no adjacent space', true);
-            }
+            GridSnapSystem.findSafePosition(clone, preferredPosition);
             
             clearSelection();
             app.selectedPieces.add(clone);
@@ -2521,7 +2712,8 @@
             if (app.currentProject) saveCurrentProject();
             loadProject(newName);
             app.gui.cancelNewProject();
-            closeMenu();
+            // Don't close menu - let user continue working with projects
+            showStatus(`Created new project: ${newName}`);
         };
 
         app.gui.cancelNewProject = function() {
@@ -2630,205 +2822,130 @@
                 const actionsDiv = itemElement.querySelector('.project-actions');
                 const editForm = itemElement.querySelector('.project-edit-form');
 
-                if (nameSpan) {
-                    nameSpan.textContent = nameToRestore;
-                    nameSpan.style.display = 'block';
-                }
+                if (nameSpan) nameSpan.style.display = 'block';
                 if (actionsDiv) actionsDiv.style.display = 'flex';
                 if (editForm) editForm.style.display = 'none';
-
+                
                 app.editingProjectName = null;
                 app.gui.originalEditName = null;
                 app.gui.currentEditProjectInput = null;
             }
         };
-
+        
         app.gui.updateProjectList = function() {
             const projectList = document.getElementById('projectList');
-            let newProjectInputRow = projectList.querySelector('.new-project-input-item');
             projectList.innerHTML = '';
-            if (newProjectInputRow) {
-                projectList.prepend(newProjectInputRow);
-            }
-
-            Object.keys(app.projects).forEach(name => {
+            Object.keys(app.projects).sort().forEach(name => {
                 const item = document.createElement('div');
                 item.className = 'project-item';
-                item.dataset.projectName = name;
                 if (name === app.currentProject) item.classList.add('active');
                 
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'project-name';
-                nameSpan.textContent = name;
-                nameSpan.onclick = (e) => {
-                    e.stopPropagation();
-                    if (name !== app.currentProject) {
-                        app.gui.cancelActiveInput();
-                        loadProject(name);
-                        closeMenu();
-                    }
-                };
-                
-                const actionsDiv = document.createElement('div');
-                actionsDiv.className = 'project-actions';
-
-                const editBtn = document.createElement('button');
-                editBtn.className = 'edit-project-btn';
-                editBtn.innerHTML = '<i class="fas fa-edit"></i>';
-                editBtn.title = "Edit Name";
-                editBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    app.gui.promptRenameProject(name, item);
-                };
-
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-project-btn';
-                deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-                deleteBtn.title = "Delete Project";
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    toggleDeleteConfirmation(name, item);
-                };
-                
-                actionsDiv.appendChild(editBtn);
-                actionsDiv.appendChild(deleteBtn);
-
-                item.appendChild(nameSpan);
-                item.appendChild(actionsDiv);
-
-                const confirmDiv = document.createElement('div');
-                confirmDiv.className = 'project-delete-confirm';
-                confirmDiv.innerHTML = `
-                    <span>Delete '${name}'?</span>
-                    <button class="confirm-yes" title="Confirm Delete"><i class="fas fa-check"></i></button>
-                    <button class="confirm-no" title="Cancel"><i class="fas fa-times"></i></button>
+                item.innerHTML = `
+                    <span class="project-name" onclick="loadProject('${name}')">${name}</span>
+                    <div class="project-actions">
+                        <button onclick="app.gui.promptRenameProject('${name}', this.closest('.project-item'))" title="Rename">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="app.gui.promptDeleteProject('${name}', this.closest('.project-item'))" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="project-delete-confirm">
+                        <span>Delete "${name}"?</span>
+                        <button class="confirm-yes" onclick="app.gui.deleteProject('${name}')" title="Confirm Delete">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="confirm-no" onclick="app.gui.cancelDeletePrompt(this.closest('.project-item'))" title="Cancel">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                 `;
-                confirmDiv.querySelector('.confirm-yes').onclick = (e) => {
-                    e.stopPropagation();
-                    actuallyDeleteProject(name);
-                };
-                confirmDiv.querySelector('.confirm-no').onclick = (e) => {
-                    e.stopPropagation();
-                    confirmDiv.classList.remove('visible');
-                };
-                item.appendChild(confirmDiv);
-
-                const editFormDiv = document.createElement('div');
-                editFormDiv.className = 'project-edit-form';
-                editFormDiv.style.display = 'none';
-                item.appendChild(editFormDiv);
-
                 projectList.appendChild(item);
             });
         };
         
-        function toggleDeleteConfirmation(projectName, projectItemElement) {
-            document.querySelectorAll('.project-delete-confirm.visible').forEach(openConfirm => {
-                if (openConfirm.parentElement !== projectItemElement) {
-                    openConfirm.classList.remove('visible');
-                }
-            });
-            const confirmDiv = projectItemElement.querySelector('.project-delete-confirm');
-            if (confirmDiv) {
-                confirmDiv.classList.toggle('visible');
+        app.gui.promptDeleteProject = function(projectName, projectItemElement) {
+            if (app.isAddingProject || app.editingProjectName) {
+                app.gui.cancelActiveInput();
             }
-        }
-
-        function actuallyDeleteProject(name) {
+            const deleteConfirmDiv = projectItemElement.querySelector('.project-delete-confirm');
+            deleteConfirmDiv.classList.add('visible');
+        };
+        
+        app.gui.cancelDeletePrompt = function(projectItemElement) {
+            const deleteConfirmDiv = projectItemElement.querySelector('.project-delete-confirm');
+            deleteConfirmDiv.classList.remove('visible');
+        };
+        
+        app.gui.deleteProject = function(projectName) {
             if (Object.keys(app.projects).length <= 1) {
-                showStatus('Cannot delete the last project', true, 3000);
-                const itemElement = document.querySelector(`.project-item[data-project-name="${name}"] .project-delete-confirm`);
-                if(itemElement) itemElement.classList.remove('visible');
+                showStatus("Cannot delete the last project.", true);
+                app.gui.cancelDeletePrompt(document.querySelector('.project-item'));
                 return;
             }
             
-            // Close any delete confirmations first
-            document.querySelectorAll('.project-delete-confirm.visible').forEach(confirm => {
-                confirm.classList.remove('visible');
-            });
+            delete app.projects[projectName];
+            localStorage.setItem('woodProjects', JSON.stringify(app.projects));
             
-            delete app.projects[name];
-            
-            if (name === app.currentProject) {
+            if (app.currentProject === projectName) {
                 const remaining = Object.keys(app.projects);
                 if (remaining.length > 0) {
                     loadProject(remaining[0]);
-                } else {
-                    app.currentProject = null;
-                    const toRemove = [];
-                    app.scene.traverse((obj) => {
-                        if (obj.userData.isWoodPiece) toRemove.push(obj);
-                    });
-                    toRemove.forEach(obj => {
-                        app.scene.remove(obj);
-                        if (obj.geometry) obj.geometry.dispose();
-                        if (obj.material) obj.material.dispose();
-                    });
-                    clearSelection();
-                    checkCollisions();
-                    updateInfoPanel();
-                    updateProjectDetails();
                 }
             }
             
-            try {
-                localStorage.setItem('woodProjects', JSON.stringify(app.projects));
-            } catch (e) {
-                console.error('Failed to save projects:', e);
+            app.gui.updateProjectList();
+            showStatus(`Deleted project: ${projectName}`);
+        };
+        
+        function handleDocumentClickForInputs(event) {
+            // Check if click is outside active inputs
+            if (app.isAddingProject && app.gui.currentNewProjectInput) {
+                if (!app.gui.currentNewProjectInput.contains(event.target) && 
+                    !event.target.closest('.add-project-btn')) {
+                    app.gui.cancelNewProject();
+                }
             }
             
-            // Force update the project list
-            setTimeout(() => {
-                app.gui.updateProjectList();
-            }, 10);
-            
-            showStatus(`Deleted project '${name}'`);
+            if (app.editingProjectName && app.gui.currentEditProjectInput) {
+                if (!app.gui.currentEditProjectInput.contains(event.target)) {
+                    app.gui.cancelRenameProject(app.editingProjectName);
+                }
+            }
         }
         
+        // Undo/Redo System
         function saveState() {
-            const state = [];
+            const state = {
+                pieces: [],
+                camera: {
+                    distance: app.cameraDistance,
+                    theta: app.cameraTheta,
+                    phi: app.cameraPhi,
+                    target: app.cameraTarget.toArray()
+                }
+            };
+            
             app.scene.traverse((obj) => {
                 if (obj.userData.isWoodPiece) {
-                    state.push({
+                    state.pieces.push({
                         thickness: obj.userData.thickness,
                         width: obj.userData.width,
                         length: obj.userData.length,
                         position: obj.position.toArray(),
                         rotation: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w],
-                        geometryVersion: obj.userData.geometryVersion,
                         id: obj.userData.id
                     });
                 }
             });
+            
             app.undoStack.push(state);
-            app.redoStack = [];
             if (app.undoStack.length > 50) app.undoStack.shift();
+            app.redoStack = [];
         }
-
-        function undo() {
-            if (app.undoStack.length <= 1) {
-                showStatus('Nothing to undo');
-                return;
-            }
-            const currentStateJson = JSON.stringify(app.undoStack.pop());
-            app.redoStack.push(JSON.parse(currentStateJson));
-            const previousState = JSON.parse(JSON.stringify(app.undoStack[app.undoStack.length - 1]));
-            restoreState(previousState);
-            showStatus('Undo');
-        }
-
-        function redo() {
-            if (app.redoStack.length === 0) {
-                showStatus('Nothing to redo');
-                return;
-            }
-            const nextState = app.redoStack.pop();
-            app.undoStack.push(nextState);
-            restoreState(JSON.parse(JSON.stringify(nextState)));
-            showStatus('Redo');
-        }
-
+        
         function restoreState(state) {
+            clearSelection();
             app.selectionOutlines.forEach(removeSelectionOutline);
             app.resizeIndicators.forEach(removeResizeIndicator);
             
@@ -2842,9 +2959,7 @@
                 if (obj.material) obj.material.dispose();
             });
             
-            clearSelection();
-            
-            state.forEach(data => {
+            state.pieces.forEach(data => {
                 const t = data.thickness / 1000;
                 const w = data.width / 1000;
                 const l = data.length / 1000;
@@ -2858,14 +2973,13 @@
                 piece.castShadow = true;
                 piece.receiveShadow = true;
                 
-                // Ensure restored pieces have unique IDs
                 const pieceId = data.id || ('piece_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
                 piece.userData = {
                     thickness: data.thickness,
                     width: data.width,
                     length: data.length,
                     isWoodPiece: true,
-                    geometryVersion: data.geometryVersion || 1,
+                    geometryVersion: 1,
                     id: pieceId
                 };
                 piece.position.fromArray(data.position);
@@ -2873,89 +2987,88 @@
                 app.scene.add(piece);
             });
             
-            saveCurrentProject();
-            updateHotkeyGuide();
+            // Restore camera state
+            app.cameraDistance = state.camera.distance;
+            app.cameraTheta = state.camera.theta;
+            app.cameraPhi = state.camera.phi;
+            app.cameraTarget.fromArray(state.camera.target);
+            updateCameraPosition();
+            
+            checkCollisions();
             updateInfoPanel();
             updateProjectDetails();
-            checkCollisions();
         }
         
+        function undo() {
+            if (app.undoStack.length <= 1) {
+                showStatus('Nothing to undo', true);
+                return;
+            }
+            
+            const currentState = app.undoStack.pop();
+            app.redoStack.push(currentState);
+            const previousState = app.undoStack[app.undoStack.length - 1];
+            restoreState(previousState);
+            saveCurrentProject();
+            showStatus('Undo');
+        }
+        
+        function redo() {
+            if (app.redoStack.length === 0) {
+                showStatus('Nothing to redo', true);
+                return;
+            }
+            
+            const redoState = app.redoStack.pop();
+            app.undoStack.push(redoState);
+            restoreState(redoState);
+            saveCurrentProject();
+            showStatus('Redo');
+        }
+        
+        // Guide Lines System
         function updateGuideLines() {
             clearGuideLines();
-            if (!app.movementState.axis || app.selectedPieces.size === 0) return;
             
-            const center = new THREE.Vector3();
-            app.selectedPieces.forEach(piece => {
-                center.add(piece.position);
-            });
-            center.divideScalar(app.selectedPieces.size);
-            
-            const lineMaterial = new THREE.LineDashedMaterial({
-                color: 0x4fc3f7,
-                linewidth: 1,
-                scale: 1,
-                dashSize: 0.1,
-                gapSize: 0.05
-            });
-            
-            const lineLength = 5;
-            const points = [];
-            
-            const posDirection = new THREE.Vector3();
-            posDirection[app.movementState.axis] = lineLength;
-            points.push(center.clone());
-            points.push(center.clone().add(posDirection));
-            
-            const negDirection = new THREE.Vector3();
-            negDirection[app.movementState.axis] = -lineLength;
-            points.push(center.clone());
-            points.push(center.clone().add(negDirection));
-            
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const guideLine = new THREE.LineSegments(geometry, lineMaterial);
-            guideLine.computeLineDistances();
-            guideLine.userData.isGuideLine = true;
-            
-            app.scene.add(guideLine);
-            app.guideLines.push(guideLine);
-            
-            if (app.movementState.axis === 'z') {
-                let lowestZ = Infinity;
-                app.selectedPieces.forEach(piece => {
-                    const box = new THREE.Box3().setFromObject(piece);
-                    lowestZ = Math.min(lowestZ, box.min.z);
+            if (app.movementState.active && app.movementState.axis && app.selectedPieces.size > 0) {
+                const center = new THREE.Vector3();
+                app.selectedPieces.forEach(p => center.add(p.position));
+                center.divideScalar(app.selectedPieces.size);
+                
+                // Create guide line along movement axis
+                const lineLength = 20;
+                const lineGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(6);
+                
+                if (app.movementState.axis === 'x') {
+                    positions[0] = center.x - lineLength; positions[1] = center.y; positions[2] = center.z;
+                    positions[3] = center.x + lineLength; positions[4] = center.y; positions[5] = center.z;
+                } else if (app.movementState.axis === 'y') {
+                    positions[0] = center.x; positions[1] = center.y - lineLength; positions[2] = center.z;
+                    positions[3] = center.x; positions[4] = center.y + lineLength; positions[5] = center.z;
+                } else if (app.movementState.axis === 'z') {
+                    positions[0] = center.x; positions[1] = center.y; positions[2] = Math.max(0, center.z - lineLength);
+                    positions[3] = center.x; positions[4] = center.y; positions[5] = center.z + lineLength;
+                }
+                
+                lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const lineMaterial = new THREE.LineDashedMaterial({
+                    color: 0x4fc3f7,
+                    linewidth: 1,
+                    dashSize: 0.1,
+                    gapSize: 0.05,
+                    opacity: 0.6,
+                    transparent: true
                 });
                 
-                if (lowestZ > 0.005) {
-                    const floorLineMaterial = new THREE.LineDashedMaterial({
-                        color: 0xffaa00,
-                        linewidth: 1,
-                        scale: 1,
-                        dashSize: 0.05,
-                        gapSize: 0.03
-                    });
-                    const floorPoints = [
-                        new THREE.Vector3(center.x, center.y, lowestZ),
-                        new THREE.Vector3(center.x, center.y, 0)
-                    ];
-                    const floorGeometry = new THREE.BufferGeometry().setFromPoints(floorPoints);
-                    const floorLine = new THREE.LineSegments(floorGeometry, floorLineMaterial);
-                    floorLine.computeLineDistances();
-                    floorLine.userData.isGuideLine = true;
-                    app.scene.add(floorLine);
-                    app.guideLines.push(floorLine);
-                    
-                    if (!app.movementState.isDragging && app.movementState.typedValue === '') {
-                        showMeasurement(`Floor: ${Math.round(lowestZ * 1000)}mm`);
-                        updateMeasurementPosition(new THREE.Vector3(center.x, center.y, lowestZ / 2));
-                    }
-                } else if (!app.movementState.isDragging && app.movementState.typedValue === '') {
-                    showMeasurement(`On floor`);
-                    updateMeasurementPosition(center);
-                }
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                line.computeLineDistances();
+                line.userData.isGuideLine = true;
+                app.scene.add(line);
+                app.guideLines.push(line);
             }
         }
-
+        
         function clearGuideLines() {
             app.guideLines.forEach(line => {
                 app.scene.remove(line);
@@ -2964,41 +3077,45 @@
             });
             app.guideLines = [];
         }
-
-        function handleDocumentClickForInputs(event) {
-            // This part is for handling clicks outside of project name input fields
-            if (app.isAddingProject && app.gui.currentNewProjectInput) {
-                // Check if the click is outside the input item AND not on the add button itself
-                if (!app.gui.currentNewProjectInput.contains(event.target) && 
-                    !event.target.closest('.add-project-btn')) {
-                    app.gui.cancelNewProject();
-                }
-            }
-            if (app.editingProjectName && app.gui.currentEditProjectInput) {
-                // Check if the click is outside the edit form AND not on an edit button within a project item
-                const projectItem = event.target.closest('.project-item');
-                let isEditButtonForThisItem = false;
-                if (projectItem && app.gui.currentEditProjectInput === projectItem) {
-                    if (event.target.closest('.edit-project-btn')) {
-                        isEditButtonForThisItem = true;
-                    }
-                }
-                if (!app.gui.currentEditProjectInput.contains(event.target) && !isEditButtonForThisItem) {
-                    app.gui.cancelRenameProject(app.gui.originalEditName);
-                }
-            }
-        }
-
+        
         function animate() {
             requestAnimationFrame(animate);
+            
+            // Update selection outlines to follow pieces
+            app.selectionOutlines.forEach((outline, piece) => {
+                outline.position.copy(piece.position);
+                outline.quaternion.copy(piece.quaternion);
+                outline.scale.copy(piece.scale);
+            });
+            
+            // Update resize indicators
+            app.resizeIndicators.forEach((indicator, piece) => {
+                const editData = app.movementState.lengthEditData?.pieceData.get(piece);
+                if (editData) {
+                    indicator.position.copy(piece.position);
+                    indicator.quaternion.copy(piece.quaternion);
+                    
+                    // Update offset for face
+                    const offsetFactor = 0.0015;
+                    const offsetVector = new THREE.Vector3(0, 0, editData.editFace === 'top' ? offsetFactor : -offsetFactor);
+                    offsetVector.applyQuaternion(piece.quaternion);
+                    indicator.position.add(offsetVector);
+                }
+            });
+            
+            // Update measurement position if visible
+            if (!app.measurementElement.classList.contains('hidden') && app.selectedPieces.size > 0) {
+                const center = new THREE.Vector3();
+                app.selectedPieces.forEach(p => center.add(p.position));
+                center.divideScalar(app.selectedPieces.size);
+                updateMeasurementPosition(center);
+            }
+            
             app.renderer.render(app.scene, app.camera);
         }
         
-        // Add debug functions to global scope for console access
-        window.toggleSettingsSection = toggleSettingsSection;
-        
-        window.addEventListener('load', init);
-        window.app = app;
+        // Initialize the application
+        init();
     </script>
 </body>
 </html>
