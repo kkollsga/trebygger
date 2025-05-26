@@ -971,9 +971,13 @@
                 app.movementState.currentOffset = finalMovement;
                 
                 // Show measurement
-                if (app.movementState.axis && Math.abs(finalMovement[app.movementState.axis]) > 0.0001) {
-                    const distance = Math.round(Math.abs(finalMovement[app.movementState.axis]) * 1000);
+                if (app.movementState.axis && finalMovement[app.movementState.axis] !== 0) { // Check if there's actual movement on the axis
+                    // MODIFICATION: Remove Math.abs() to show signed distance
+                    const distance = Math.round(finalMovement[app.movementState.axis] * 1000); 
                     showMeasurement(`${app.movementState.axis.toUpperCase()}: ${distance}mm`);
+                } else if (app.movementState.axis && finalMovement[app.movementState.axis] === 0 && desiredMovement[app.movementState.axis] !== 0) {
+                    // If movement was attempted but resulted in zero (e.g. blocked), show 0
+                    showMeasurement(`${app.movementState.axis.toUpperCase()}: 0mm`);
                 }
                 
                 updateGuideLines();
@@ -1002,9 +1006,12 @@
             app.movementState.currentOffset = finalMovement;
             
             // Show measurement
-            if (app.movementState.axis && Math.abs(finalMovement[app.movementState.axis]) > 0.0001) {
-                const distance = Math.round(Math.abs(finalMovement[app.movementState.axis]) * 1000);
+            if (app.movementState.axis && finalMovement[app.movementState.axis] !== 0) {
+                // MODIFICATION: Remove Math.abs() to show signed distance
+                const distance = Math.round(finalMovement[app.movementState.axis] * 1000);
                 showMeasurement(`${app.movementState.axis.toUpperCase()}: ${distance}mm`);
+            } else if (app.movementState.axis && finalMovement[app.movementState.axis] === 0 && desiredMovement[app.movementState.axis] !== 0) {
+                 showMeasurement(`${app.movementState.axis.toUpperCase()}: 0mm`);
             }
             
             updateGuideLines();
@@ -2217,18 +2224,25 @@
                 // Handle arrow keys
                 if (key === 'arrowup' || key === 'arrowdown') {
                     event.preventDefault();
+                    // Up arrow results in a positive stepSize, down arrow in a negative stepSize.
+                    // This will cause movement towards higher or lower axis values respectively.
                     const stepSize = key === 'arrowup' ? 0.01 : -0.01; // 10mm steps
                     
                     if (app.movementState.lengthEditData) {
                         // Step length adjustment
                         app.movementState.lengthEditData.pieces.forEach(piece => {
                             const currentLength = piece.userData.currentPreviewLength || piece.userData.length;
+                            // Length adjustment is effectively always positive change for up, negative for down relative to what it would do
+                            // Here, stepSize is used to increase or decrease the length.
                             const newLength = Math.max(MIN_PIECE_LENGTH * 1000, currentLength + stepSize * 1000);
                             applyLengthChange(piece, newLength, app.movementState.lengthEditData.pieceData.get(piece));
                         });
                     } else if (app.movementState.axis) {
                         // Step movement
                         const movement = new THREE.Vector3();
+                        // The stepSize (positive for up, negative for down) is added to the current offset.
+                        // This will result in movement towards higher axis values for up arrow,
+                        // and towards lower axis values for down arrow.
                         movement[app.movementState.axis] = app.movementState.currentOffset[app.movementState.axis] + stepSize;
                         unifiedMove(app.selectedPieces, movement, 'step');
                     }
